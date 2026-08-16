@@ -1,0 +1,135 @@
+2026-06-30 17:54:53,603 | INFO | Logger Test - INFO
+2026-06-30 17:54:53,605 | WARNING | Logger Test - WARNING
+2026-06-30 17:54:53,605 | ERROR | Logger Test - ERROR
+2026-07-01 20:51:16,540 | INFO | MongoDB connected successfully.
+2026-07-01 21:11:25,553 | INFO | MongoDB connection closed.
+2026-07-01 21:11:27,901 | INFO | MongoDB connected successfully.
+2026-07-01 21:11:34,020 | INFO | MongoDB connection closed.
+2026-07-01 21:11:36,481 | INFO | MongoDB connected successfully.
+2026-07-01 21:11:44,365 | INFO | MongoDB connection closed.
+2026-07-01 21:11:46,660 | INFO | MongoDB connected successfully.
+2026-07-01 21:29:12,543 | INFO | MongoDB connection closed.
+2026-07-03 10:30:51,634 | INFO | MongoDB connected successfully.
+2026-07-03 10:35:02,958 | INFO | MongoDB connection closed.
+2026-07-03 10:35:07,447 | INFO | MongoDB connected successfully.
+2026-07-03 10:35:37,883 | INFO | MongoDB connection closed.
+2026-07-03 10:43:32,496 | INFO | MongoDB connected successfully.
+2026-07-03 12:04:13,438 | INFO | MongoDB connection closed.
+2026-07-05 17:37:50,844 | INFO | MongoDB connected successfully.
+2026-07-05 17:38:41,563 | INFO | MongoDB connection closed.
+2026-07-05 22:46:53,717 | INFO | MongoDB connected successfully.
+2026-07-05 22:50:10,652 | INFO | MongoDB connection closed.
+2026-07-05 22:50:12,028 | INFO | MongoDB connected successfully.
+2026-07-05 22:50:17,325 | INFO | MongoDB connection closed.
+2026-07-05 22:50:18,570 | INFO | MongoDB connected successfully.
+2026-07-05 22:50:24,059 | INFO | MongoDB connection closed.
+2026-07-05 22:50:25,198 | INFO | MongoDB connected successfully.
+2026-07-05 22:50:25,789 | INFO | MongoDB connection closed.
+2026-07-05 22:50:27,252 | INFO | MongoDB connected successfully.
+2026-07-05 22:51:01,359 | INFO | MongoDB connection closed.
+2026-07-05 22:51:03,425 | INFO | MongoDB connected successfully.
+2026-07-05 22:51:15,107 | INFO | MongoDB connection closed.
+2026-07-05 22:51:16,525 | INFO | MongoDB connected successfully.
+2026-07-05 22:51:16,726 | INFO | MongoDB connection closed.
+2026-07-05 22:51:17,964 | INFO | MongoDB connected successfully.
+2026-07-05 22:51:20,519 | INFO | MongoDB connection closed.
+2026-07-05 22:51:38,066 | INFO | MongoDB connected successfully.
+2026-07-05 22:51:42,464 | INFO | MongoDB connection closed.
+2026-07-05 22:51:43,556 | INFO | MongoDB connected successfully.
+2026-07-05 22:51:46,553 | INFO | MongoDB connection closed.
+2026-07-05 22:51:49,835 | INFO | MongoDB connected successfully.
+2026-07-05 22:51:50,989 | INFO | MongoDB connection closed.
+2026-07-05 22:52:39,172 | INFO | MongoDB connected successfully.
+2026-07-05 22:56:47,091 | INFO | MongoDB connection closed.
+2026-07-05 22:56:48,454 | INFO | MongoDB connected successfully.
+2026-07-05 22:56:52,411 | INFO | MongoDB connection closed.
+2026-07-05 22:56:53,778 | INFO | MongoDB connected successfully.
+2026-07-05 22:56:56,217 | INFO | MongoDB connection closed.
+2026-07-05 22:56:57,416 | INFO | MongoDB connected successfully.
+2026-07-05 22:56:58,006 | INFO | MongoDB connection closed.
+2026-07-05 22:56:59,466 | INFO | MongoDB connected successfully.
+2026-07-05 22:57:00,499 | INFO | MongoDB connection closed.
+2026-07-05 22:57:01,951 | INFO | MongoDB connected successfully.
+2026-07-05 22:57:12,767 | INFO | MongoDB connection closed.
+2026-07-05 22:59:06,316 | INFO | MongoDB connected successfully.
+2026-07-05 23:00:57,715 | INFO | MongoDB connection closed.
+2026-07-05 23:18:09,722 | INFO | MongoDB connected successfully.
+2026-07-05 23:19:36,320 | INFO | MongoDB connection closed.
+2026-07-05 23:19:37,913 | INFO | MongoDB connected successfully.
+2026-07-05 23:20:37,996 | INFO | MongoDB connection closed.
+2026-07-05 23:21:04,711 | INFO | MongoDB connected successfully.
+2026-07-05 23:22:36,710 | INFO | MongoDB connection closed.
+2026-07-05 23:22:37,885 | INFO | MongoDB connected successfully.
+2026-07-05 23:22:38,066 | INFO | MongoDB connection closed.
+2026-07-05 23:22:39,563 | INFO | MongoDB connected successfully.
+2026-07-05 23:23:02,414 | INFO | MongoDB connection closed.
+2026-07-05 23:23:03,793 | INFO | MongoDB connected successfully.
+2026-07-05 23:23:43,164 | INFO | MongoDB connection closed.
+2026-07-05 23:23:46,435 | INFO | MongoDB connected successfully.
+2026-07-05 23:23:47,909 | INFO | MongoDB connection closed.
+2026-07-05 23:23:49,059 | INFO | MongoDB connected successfully.
+2026-07-05 23:27:27,459 | INFO | MongoDB connection closed.
+2026-07-05 23:27:28,878 | INFO | MongoDB connected successfully.
+2026-07-05 23:27:56,122 | INFO | MongoDB connection closed.
+2026-07-05 23:27:57,607 | INFO | MongoDB connected successfully.
+2026-07-05 23:29:00,565 | INFO | MongoDB connection closed.
+2026-07-05 23:29:44,082 | INFO | MongoDB connected successfully.
+2026-07-05 23:35:02,505 | INFO | MongoDB connection closed.
+2026-07-05 23:36:21,826 | INFO | MongoDB connected successfully.
+2026-07-05 23:36:34,347 | INFO | MongoDB connection closed.
+2026-07-05 23:36:36,075 | INFO | MongoDB connected successfully.
+2026-07-05 23:36:49,023 | INFO | MongoDB connection closed.
+2026-07-05 23:36:50,305 | INFO | MongoDB connected successfully.
+2026-07-05 23:36:50,473 | INFO | MongoDB connection closed.
+2026-07-05 23:36:51,938 | INFO | MongoDB connected successfully.
+2026-07-05 23:36:52,429 | INFO | MongoDB connection closed.
+2026-07-05 23:36:54,391 | INFO | MongoDB connected successfully.
+2026-07-05 23:37:01,526 | INFO | MongoDB connection closed.
+2026-07-05 23:37:03,051 | INFO | MongoDB connected successfully.
+2026-07-05 23:37:08,044 | INFO | MongoDB connection closed.
+2026-07-05 23:37:23,318 | INFO | MongoDB connected successfully.
+2026-07-05 23:37:49,273 | INFO | New user registered: rahul@gmail.com
+2026-07-05 23:43:35,401 | INFO | MongoDB connection closed.
+2026-08-16 10:02:04,073 | INFO | MongoDB connected successfully.
+2026-08-16 10:08:16,235 | INFO | New user registered: test@example.com
+2026-08-16 10:15:48,464 | INFO | MongoDB connection closed.
+2026-08-16 10:15:51,469 | INFO | MongoDB connected successfully.
+2026-08-16 10:16:03,819 | INFO | MongoDB connection closed.
+2026-08-16 10:16:06,433 | INFO | MongoDB connected successfully.
+2026-08-16 10:16:13,003 | INFO | MongoDB connection closed.
+2026-08-16 10:22:54,785 | INFO | MongoDB connected successfully.
+2026-08-16 11:03:28,629 | INFO | MongoDB connection closed.
+2026-08-16 11:03:31,153 | INFO | MongoDB connected successfully.
+2026-08-16 11:03:44,902 | INFO | MongoDB connection closed.
+2026-08-16 11:05:31,522 | INFO | MongoDB connected successfully.
+2026-08-16 11:59:10,294 | INFO | MongoDB connected successfully.
+2026-08-16 12:00:27,442 | INFO | MongoDB connection closed.
+2026-08-16 12:14:47,972 | INFO | MongoDB connected successfully.
+2026-08-16 12:19:07,661 | INFO | MongoDB connection closed.
+2026-08-16 12:21:11,139 | INFO | MongoDB connected successfully.
+2026-08-16 12:33:50,455 | INFO | MongoDB connection closed.
+2026-08-16 12:33:53,380 | INFO | MongoDB connected successfully.
+2026-08-16 12:33:53,655 | INFO | MongoDB connection closed.
+2026-08-16 13:42:38,083 | INFO | MongoDB connected successfully.
+2026-08-16 13:44:20,425 | INFO | New user registered: pharmacy@test.com
+2026-08-16 13:55:36,159 | INFO | User logged in successfully: pharmacy@test.com
+2026-08-16 14:05:09,658 | INFO | MongoDB connection closed.
+2026-08-16 14:07:26,605 | INFO | MongoDB connected successfully.
+2026-08-16 14:07:32,714 | INFO | MongoDB connection closed.
+2026-08-16 14:07:58,062 | INFO | MongoDB connected successfully.
+2026-08-16 14:09:23,082 | INFO | User logged in successfully: pharmacy@test.com
+2026-08-16 17:08:50,226 | INFO | MongoDB connected successfully.
+2026-08-16 17:11:24,135 | INFO | User logged in successfully: pharmacy@test.com
+2026-08-16 17:20:12,967 | INFO | User logged in successfully: pharmacy@test.com
+2026-08-16 17:23:37,472 | INFO | Bill generated at kendra 6a815d68e9e6ce1b229e4dec: 6a81a4c1cde9844e631a63dc, total ₹19.2
+2026-08-16 17:29:59,487 | INFO | MongoDB connection closed.
+2026-08-16 17:30:02,454 | INFO | MongoDB connected successfully.
+2026-08-16 17:30:29,034 | INFO | MongoDB connection closed.
+2026-08-16 17:30:32,199 | INFO | MongoDB connected successfully.
+2026-08-16 17:31:55,306 | INFO | MongoDB connection closed.
+2026-08-16 17:32:00,752 | INFO | MongoDB connected successfully.
+2026-08-16 17:40:35,487 | INFO | New user registered: sumupoojary0@gmail.com
+2026-08-16 17:49:31,136 | INFO | MongoDB connection closed.
+2026-08-16 17:50:05,922 | INFO | MongoDB connected successfully.
+2026-08-16 17:50:55,191 | INFO | User logged in successfully: sumupoojary0@gmail.com
+2026-08-16 17:58:06,526 | INFO | MongoDB connection closed.
