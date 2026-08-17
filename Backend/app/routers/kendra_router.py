@@ -7,6 +7,7 @@ from app.utils.constants import UserRole
 from app.services.kendra_service import (
     find_nearby_kendras,
     get_kendra_by_id,
+    get_kendra_by_owner,
     find_medicine_availability,
     restock_medicine,
     generate_bill,
@@ -17,6 +18,14 @@ router = APIRouter(
     prefix="/api/v1/kendras",
     tags=["Kendras"],
 )
+
+
+@router.get("/mine")
+async def mine(
+    current_user: TokenPayload = Depends(require_role([UserRole.PHARMACY, UserRole.ADMIN])),
+):
+    """Get the Kendra managed by the logged-in pharmacy owner. Pharmacy owner / Admin only."""
+    return await get_kendra_by_owner(current_user.sub)
 
 
 @router.get("/nearby")
@@ -57,7 +66,7 @@ async def restock(
     current_user: TokenPayload = Depends(require_role([UserRole.PHARMACY, UserRole.ADMIN])),
 ):
     """Add a new batch of stock arriving from the supplier. Pharmacy owner / Admin only."""
-    return await restock_medicine(kendra_id, data)
+    return await restock_medicine(kendra_id, data, current_user.sub, current_user.role)
 
 
 @router.post("/{kendra_id}/bill")
@@ -71,4 +80,4 @@ async def bill(
     (oldest expiry first) and updates stock status automatically.
     Pharmacy owner / Admin only.
     """
-    return await generate_bill(kendra_id, data)
+    return await generate_bill(kendra_id, data, current_user.sub, current_user.role)

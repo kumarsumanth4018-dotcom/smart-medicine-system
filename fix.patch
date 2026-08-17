@@ -1,0 +1,359 @@
+diff --git a/Backend/app/models/kendra_model.py b/Backend/app/models/kendra_model.py
+index 88bc2a6..9170a46 100644
+--- a/Backend/app/models/kendra_model.py
++++ b/Backend/app/models/kendra_model.py
+@@ -29,6 +29,7 @@ class KendraModel(BaseDocument):
+     name: str = Field(..., min_length=2, max_length=200)
+     address: str = Field(..., min_length=2, max_length=300)
+     phone: Optional[str] = Field(default=None, max_length=20)
++    owner_email: Optional[str] = Field(default=None, description="Email (JWT sub) of the pharmacy owner managing this Kendra")
+     rating: Optional[float] = Field(default=None, ge=0, le=5)
+     location: GeoLocation
+     stock: List[StockItemModel] = []
+diff --git a/Backend/app/routers/kendra_router.py b/Backend/app/routers/kendra_router.py
+index 8b385f8..c1933af 100644
+--- a/Backend/app/routers/kendra_router.py
++++ b/Backend/app/routers/kendra_router.py
+@@ -7,6 +7,7 @@ from app.utils.constants import UserRole
+ from app.services.kendra_service import (
+     find_nearby_kendras,
+     get_kendra_by_id,
++    get_kendra_by_owner,
+     find_medicine_availability,
+     restock_medicine,
+     generate_bill,
+@@ -19,6 +20,14 @@ router = APIRouter(
+ )
+ 
+ 
++@router.get("/mine")
++async def mine(
++    current_user: TokenPayload = Depends(require_role([UserRole.PHARMACY, UserRole.ADMIN])),
++):
++    """Get the Kendra managed by the logged-in pharmacy owner. Pharmacy owner / Admin only."""
++    return await get_kendra_by_owner(current_user.sub)
++
++
+ @router.get("/nearby")
+ async def nearby(
+     lat: float = Query(..., description="User's latitude"),
+@@ -57,7 +66,7 @@ async def restock(
+     current_user: TokenPayload = Depends(require_role([UserRole.PHARMACY, UserRole.ADMIN])),
+ ):
+     """Add a new batch of stock arriving from the supplier. Pharmacy owner / Admin only."""
+-    return await restock_medicine(kendra_id, data)
++    return await restock_medicine(kendra_id, data, current_user.sub, current_user.role)
+ 
+ 
+ @router.post("/{kendra_id}/bill")
+@@ -71,4 +80,4 @@ async def bill(
+     (oldest expiry first) and updates stock status automatically.
+     Pharmacy owner / Admin only.
+     """
+-    return await generate_bill(kendra_id, data)
+\ No newline at end of file
++    return await generate_bill(kendra_id, data, current_user.sub, current_user.role)
+\ No newline at end of file
+diff --git a/Backend/app/schemas/kendra_schemas.py b/Backend/app/schemas/kendra_schemas.py
+index fc872de..4eae9d6 100644
+--- a/Backend/app/schemas/kendra_schemas.py
++++ b/Backend/app/schemas/kendra_schemas.py
+@@ -23,6 +23,7 @@ class KendraResponse(BaseModel):
+     address: str
+     phone: Optional[str] = None
+     rating: Optional[float] = None
++    owner_email: Optional[str] = None
+     latitude: float
+     longitude: float
+     distance_km: Optional[float] = None
+diff --git a/Backend/app/services/kendra_service.py b/Backend/app/services/kendra_service.py
+index a36103e..1f2eaee 100644
+--- a/Backend/app/services/kendra_service.py
++++ b/Backend/app/services/kendra_service.py
+@@ -30,6 +30,7 @@ def _serialize_kendra(doc: dict, distance_km: float | None = None) -> dict:
+         "address": doc["address"],
+         "phone": doc.get("phone"),
+         "rating": doc.get("rating"),
++        "owner_email": doc.get("owner_email"),
+         "longitude": coords[0],
+         "latitude": coords[1],
+         "distance_km": distance_km,
+@@ -77,6 +78,24 @@ async def get_kendra_by_id(kendra_id: str) -> dict:
+     return _serialize_kendra(doc)
+ 
+ 
++async def get_kendra_by_owner(owner_email: str) -> dict:
++    """
++    Fetch the single Kendra managed by the logged-in pharmacy owner.
++    Used by the Pharmacy Dashboard to know which Kendra it's operating on
++    without the frontend having to know/store a kendra_id separately.
++    """
++    db = get_database()
++
++    doc = await db[KENDRAS_COLLECTION].find_one({"owner_email": owner_email})
++    if not doc:
++        raise HTTPException(
++            status_code=status.HTTP_404_NOT_FOUND,
++            detail="No Kendra is linked to this pharmacy owner account yet.",
++        )
++
++    return _serialize_kendra(doc)
++
++
+ async def find_medicine_availability(
+     pmbi_code: str,
+     lat: float,
+@@ -137,7 +156,23 @@ def compute_stock_status(quantity: int) -> str:
+     return "in_stock"
+ 
+ 
+-async def restock_medicine(kendra_id: str, data: RestockRequest) -> dict:
++def _assert_owns_kendra(kendra: dict, requester_email: str, requester_role: str) -> None:
++    """Admins may manage any Kendra; pharmacy owners only their own."""
++    if requester_role == "admin":
++        return
++    if kendra.get("owner_email") != requester_email:
++        raise HTTPException(
++            status_code=status.HTTP_403_FORBIDDEN,
++            detail="You do not manage this Kendra.",
++        )
++
++
++async def restock_medicine(
++    kendra_id: str,
++    data: RestockRequest,
++    requester_email: str,
++    requester_role: str,
++) -> dict:
+     """
+     Add a new batch of stock arriving from the supplier (Pharmacy Owner).
+     This is separate from billing — it only ever ADDS stock.
+@@ -151,6 +186,7 @@ async def restock_medicine(kendra_id: str, data: RestockRequest) -> dict:
+             status_code=status.HTTP_404_NOT_FOUND,
+             detail="Kendra not found.",
+         )
++    _assert_owns_kendra(kendra, requester_email, requester_role)
+ 
+     stock = kendra.get("stock", [])
+     new_batch = {
+@@ -229,7 +265,12 @@ def _deduct_fifo(batches: list, quantity_needed: int) -> tuple[list, list]:
+     return result_batches, deduction_log
+ 
+ 
+-async def generate_bill(kendra_id: str, data: BillRequest) -> dict:
++async def generate_bill(
++    kendra_id: str,
++    data: BillRequest,
++    requester_email: str,
++    requester_role: str,
++) -> dict:
+     """
+     Generate a bill for one or more medicines sold.
+     For each line item: deducts stock FIFO (oldest expiry first),
+@@ -244,6 +285,7 @@ async def generate_bill(kendra_id: str, data: BillRequest) -> dict:
+             status_code=status.HTTP_404_NOT_FOUND,
+             detail="Kendra not found.",
+         )
++    _assert_owns_kendra(kendra, requester_email, requester_role)
+ 
+     stock = kendra.get("stock", [])
+     line_items = []
+diff --git a/Frontend/src/services/inventoryService.js b/Frontend/src/services/inventoryService.js
+index 90dd172..ec4e28e 100644
+--- a/Frontend/src/services/inventoryService.js
++++ b/Frontend/src/services/inventoryService.js
+@@ -1,26 +1,49 @@
+ /**
+  * Inventory Service
+  *
+- * Handles medicine stock management API calls.
+- * Used by the pharmacy dashboard inventory module.
++ * Used by the Pharmacy Dashboard / Inventory page. There is no standalone
++ * /inventory API on the backend — stock lives inside each Kendra document
++ * and is mutated only through /kendras/:id/restock (add a supplier batch)
++ * and /kendras/:id/bill (sell stock, FIFO-deducted). This service wraps
++ * pharmacyService so callers don't need to know the kendra_id: it looks
++ * up "my Kendra" first via GET /kendras/mine.
+  *
+- * Endpoints:
+- *  GET  /inventory             — pharmacy's stock list
+- *  POST /inventory             — add new stock entry
+- *  PUT  /inventory/:id         — update stock quantity / details
+- *  DELETE /inventory/:id       — remove stock entry
++ * Requires the logged-in user to be a pharmacy owner (role=pharmacy) whose
++ * account email matches a Kendra's owner_email in the database — see
++ * Backend/app/services/kendra_service.py::get_kendra_by_owner.
+  */
+ 
+-import axiosClient from '../config/axiosClient'
++import pharmacyService from './pharmacyService'
+ 
+-const inventoryService = {
+-  getAll: (params) => axiosClient.get('/inventory', { params }),
++let cachedKendraId = null
++
++async function getMyKendraId() {
++  if (cachedKendraId) return cachedKendraId
++  const { data } = await pharmacyService.getMine()
++  cachedKendraId = data.id
++  return cachedKendraId
++}
+ 
+-  create: (data) => axiosClient.post('/inventory', data),
++const inventoryService = {
++  // Full stock list (with batches) for the logged-in pharmacy owner's Kendra.
++  getAll: async () => {
++    const kendraId = await getMyKendraId()
++    const { data } = await pharmacyService.getById(kendraId)
++    return { data: data.stock ?? [] }
++  },
+ 
+-  update: (id, data) => axiosClient.put(`/inventory/${id}`, data),
++  // Restock / add batch — new stock arriving from the supplier.
++  create: async (data) => {
++    const kendraId = await getMyKendraId()
++    return pharmacyService.restock(kendraId, data)
++  },
+ 
+-  remove: (id) => axiosClient.delete(`/inventory/${id}`),
++  // Billing — sells stock, FIFO-deducted, updates status automatically.
++  // `data` shape: { items: [{ pmbi_code, quantity }, ...] }
++  bill: async (data) => {
++    const kendraId = await getMyKendraId()
++    return pharmacyService.bill(kendraId, data)
++  },
+ }
+ 
+ export default inventoryService
+diff --git a/Frontend/src/services/pharmacyService.js b/Frontend/src/services/pharmacyService.js
+index 697ba93..20e31ab 100644
+--- a/Frontend/src/services/pharmacyService.js
++++ b/Frontend/src/services/pharmacyService.js
+@@ -1,33 +1,58 @@
+ /**
+  * Pharmacy Service
+  *
+- * Handles all pharmacy-related API calls including location-based
+- * nearby pharmacy queries (used with React Leaflet map view).
++ * Talks to the backend's /kendras/* routes (a "Kendra" IS the pharmacy /
++ * Jan Aushadhi outlet in this system — there is no separate /pharmacies
++ * API). Renamed the endpoints below to match Backend/app/routers/kendra_router.py
++ * exactly; the old /pharmacies/* paths did not exist on the backend.
+  *
+- * Endpoints:
+- *  GET  /pharmacies/nearby         — find pharmacies near a coordinate
+- *  GET  /pharmacies/search         — search pharmacies by name
+- *  GET  /pharmacies/:id            — pharmacy detail
+- *  GET  /pharmacies/:id/inventory  — medicines in stock at a pharmacy
+- *  POST /pharmacies                — register pharmacy (admin)
+- *  PUT  /pharmacies/:id            — update pharmacy profile
++ * Endpoints (actual backend shape):
++ *  GET  /kendras/nearby?lat=...&lng=...&radius_km=...          — public
++ *  GET  /kendras/medicine/:pmbi_code/nearby?lat=...&lng=...    — public, sorted by distance
++ *  GET  /kendras/:id                                            — public, full detail incl. stock/batches
++ *  GET  /kendras/mine                                            — pharmacy owner / admin, "my Kendra"
++ *  POST /kendras/:id/restock                                    — pharmacy owner / admin
++ *  POST /kendras/:id/bill                                       — pharmacy owner / admin
+  */
+ 
+ import axiosClient from '../config/axiosClient'
+ 
+ const pharmacyService = {
+-  getNearby: (params) => axiosClient.get('/pharmacies/nearby', { params }),
++  getNearby: (params) => axiosClient.get('/kendras/nearby', { params }),
+ 
+-  search: (params) => axiosClient.get('/pharmacies/search', { params }),
++  getMedicineNearby: (pmbiCode, params) =>
++    axiosClient.get(`/kendras/medicine/${pmbiCode}/nearby`, { params }),
+ 
+-  getById: (id) => axiosClient.get(`/pharmacies/${id}`),
++  getById: (id) => axiosClient.get(`/kendras/${id}`),
+ 
+-  getInventory: (id, params) =>
+-    axiosClient.get(`/pharmacies/${id}/inventory`, { params }),
++  // The Kendra managed by the currently logged-in pharmacy owner.
++  getMine: () => axiosClient.get('/kendras/mine'),
+ 
+-  create: (data) => axiosClient.post('/pharmacies', data),
++  restock: (kendraId, data) => axiosClient.post(`/kendras/${kendraId}/restock`, data),
+ 
+-  update: (id, data) => axiosClient.put(`/pharmacies/${id}`, data),
++  bill: (kendraId, data) => axiosClient.post(`/kendras/${kendraId}/bill`, data),
++}
++
++/**
++ * Maps a raw backend Kendra record to the shape expected by
++ * PharmacyCard / NearbyPharmacyList (name, distance, etc.)
++ *
++ * Backend shape:
++ *   { id, name, address, phone, rating, owner_email, latitude, longitude,
++ *     distance_km, stock: [{ pmbi_code, total_qty, status, batches }] }
++ */
++export function mapKendraToCard(k) {
++  return {
++    id: k.id,
++    name: k.name,
++    address: k.address,
++    phone: k.phone,
++    rating: k.rating,
++    latitude: k.latitude,
++    longitude: k.longitude,
++    distanceKm: k.distance_km,
++    stock: k.stock ?? [],
++  }
+ }
+ 
+ export default pharmacyService
+diff --git a/Frontend/src/services/userService.js b/Frontend/src/services/userService.js
+index 9f70871..db0cbc2 100644
+--- a/Frontend/src/services/userService.js
++++ b/Frontend/src/services/userService.js
+@@ -1,30 +1,32 @@
+ /**
+  * User Service
+  *
+- * Handles all user profile API calls.
+- * Used by UserContext and user-related components once implemented.
++ * The backend has no separate /users router — the profile of the
++ * logged-in user is served by /auth/me (see Backend/app/routers/auth_router.py
++ * and app/services/auth_service.py::get_current_user_profile). There is
++ * also no PUT/DELETE for the user's own profile yet, and no admin
++ * user-listing endpoint — those calls are left as documented TODOs
++ * rather than pointed at routes that don't exist.
+  *
+- * Endpoints:
+- *  GET    /users/me
+- *  PUT    /users/me
+- *  DELETE /users/me
+- *  GET    /users/:id       (admin only)
+- *  GET    /users           (admin only)
++ * Endpoints (actual backend shape):
++ *  GET /auth/me   — full profile: id, full_name, email, phone_number, role, status, is_email_verified
+  */
+ 
+ import axiosClient from '../config/axiosClient'
+ 
+ const userService = {
+-  getMe: () => axiosClient.get('/users/me'),
++  getMe: () => axiosClient.get('/auth/me'),
+ 
+-  updateMe: (data) => axiosClient.put('/users/me', data),
++  // TODO(backend): no PUT /auth/me yet — add an update-profile endpoint
++  // before wiring ProfilePage's edit form to a real call.
++  updateMe: () => {
++    throw new Error('updateMe is not implemented on the backend yet.')
++  },
+ 
+-  deleteMe: () => axiosClient.delete('/users/me'),
+-
+-  // Admin operations
+-  getAllUsers: (params) => axiosClient.get('/users', { params }),
+-
+-  getUserById: (id) => axiosClient.get(`/users/${id}`),
++  // TODO(backend): no admin user-listing endpoints yet.
++  getAllUsers: () => {
++    throw new Error('getAllUsers is not implemented on the backend yet.')
++  },
+ }
+ 
+ export default userService

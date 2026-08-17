@@ -29,6 +29,7 @@ class KendraModel(BaseDocument):
     name: str = Field(..., min_length=2, max_length=200)
     address: str = Field(..., min_length=2, max_length=300)
     phone: Optional[str] = Field(default=None, max_length=20)
+    owner_email: Optional[str] = Field(default=None, description="Email (JWT sub) of the pharmacy owner managing this Kendra")
     rating: Optional[float] = Field(default=None, ge=0, le=5)
     location: GeoLocation
     stock: List[StockItemModel] = []

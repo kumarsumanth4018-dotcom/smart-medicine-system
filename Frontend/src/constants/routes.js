@@ -41,6 +41,7 @@ export const ROUTES = {
     INVENTORY:      '/pharmacy/inventory',
     INVENTORY_ADD:  '/pharmacy/inventory/add',
     INVENTORY_EDIT: '/pharmacy/inventory/edit/:id',
+    BILLING:        '/pharmacy/billing',
     PRESCRIPTIONS:  '/pharmacy/prescriptions',
     PROFILE:        '/pharmacy/profile',
   },

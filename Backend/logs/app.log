@@ -133,3 +133,18 @@
 2026-08-16 17:50:05,922 | INFO | MongoDB connected successfully.
 2026-08-16 17:50:55,191 | INFO | User logged in successfully: sumupoojary0@gmail.com
 2026-08-16 17:58:06,526 | INFO | MongoDB connection closed.
+2026-08-17 09:06:53,066 | INFO | MongoDB connected successfully.
+2026-08-17 09:11:35,694 | INFO | MongoDB connection closed.
+2026-08-17 16:45:09,166 | INFO | MongoDB connected successfully.
+2026-08-17 16:45:46,044 | INFO | User logged in successfully: pharmacy@test.com
+2026-08-17 16:50:30,326 | INFO | User logged in successfully: pharmacy@test.com
+2026-08-17 16:52:39,952 | INFO | MongoDB connection closed.
+2026-08-17 16:54:02,016 | INFO | MongoDB connected successfully.
+2026-08-17 16:56:23,466 | INFO | MongoDB connection closed.
+2026-08-17 16:56:30,183 | INFO | MongoDB connected successfully.
+2026-08-17 16:57:56,163 | INFO | User logged in successfully: pharmacy@test.com
+2026-08-17 17:00:39,117 | INFO | User logged in successfully: pharmacy@test.com
+2026-08-17 17:08:21,474 | INFO | MongoDB connection closed.
+2026-08-17 17:08:41,560 | INFO | MongoDB connected successfully.
+2026-08-17 17:09:26,216 | INFO | User logged in successfully: pharmacy@test.com
+2026-08-17 17:11:03,379 | INFO | MongoDB connection closed.

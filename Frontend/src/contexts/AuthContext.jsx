@@ -92,6 +92,7 @@ export function AuthProvider({ children }) {
         email: profile.email,
         phone: profile.phone_number,
         role: BACKEND_ROLE_MAP[profile.role] ?? 'patient',
+        assignedKendraId: profile.assigned_kendra_id ?? null,
       }
 
       storeSession(user, data.access_token, null)

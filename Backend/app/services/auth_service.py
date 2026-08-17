@@ -126,4 +126,5 @@ async def get_current_user_profile(email: str) -> dict:
         "role": user["role"],
         "status": user["status"],
         "is_email_verified": user["is_email_verified"],
+        "assigned_kendra_id": user.get("assigned_kendra_id"),
     }

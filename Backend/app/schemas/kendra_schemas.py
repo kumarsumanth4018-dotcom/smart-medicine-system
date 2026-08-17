@@ -23,6 +23,7 @@ class KendraResponse(BaseModel):
     address: str
     phone: Optional[str] = None
     rating: Optional[float] = None
+    owner_email: Optional[str] = None
     latitude: float
     longitude: float
     distance_km: Optional[float] = None

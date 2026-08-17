@@ -104,6 +104,7 @@ const ProfilePage             = lazy(() => import('../pages/profile/ProfilePage'
 // =====================================================
 const PharmacyDashboard = lazy(() => import('../pages/pharmacy/PharmacyDashboard'))
 const InventoryPage     = lazy(() => import('../pages/pharmacy/InventoryPage'))
+const BillingPage       = lazy(() => import('../pages/pharmacy/BillingPage'))
 const MedicineFormPage  = lazy(() => import('../pages/pharmacy/MedicineFormPage'))
 
 // =====================================================
@@ -181,6 +182,7 @@ function AppRouter() {
             <Route path="pharmacy/inventory"          element={<InventoryPage />} />
             <Route path="pharmacy/inventory/add"      element={<MedicineFormPage />} />
             <Route path="pharmacy/inventory/edit/:id" element={<MedicineFormPage />} />
+            <Route path="pharmacy/billing"            element={<BillingPage />} />
             {/* TODO: prescriptions page in future module */}
             <Route path="pharmacy/prescriptions"      element={<InventoryPage />} />
             {/* TODO: pharmacy profile page in future module */}

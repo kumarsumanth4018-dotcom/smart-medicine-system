@@ -19,6 +19,7 @@ import {
   HiOutlineCog6Tooth,
   HiOutlineClipboardDocument,
   HiOutlineDocumentText,
+  HiOutlineReceiptPercent,
 } from 'react-icons/hi2'
 import {
   MdDashboard,
@@ -45,6 +46,7 @@ export const PHARMACY_NAV = [
   { type: 'item', label: 'Dashboard',         to: ROUTES.PHARMACY.DASHBOARD,     icon: MdDashboard },
   { type: 'group', label: 'Management' },
   { type: 'item', label: 'Inventory',         to: ROUTES.PHARMACY.INVENTORY,     icon: MdInventory2 },
+  { type: 'item', label: 'Billing',           to: ROUTES.PHARMACY.BILLING,       icon: HiOutlineReceiptPercent },
   { type: 'item', label: 'Prescriptions',     to: ROUTES.PHARMACY.PRESCRIPTIONS, icon: HiOutlineClipboardDocument },
   { type: 'group', label: 'Account' },
   { type: 'item', label: 'Pharmacy Profile',  to: ROUTES.PHARMACY.PROFILE,       icon: MdLocalPharmacy },

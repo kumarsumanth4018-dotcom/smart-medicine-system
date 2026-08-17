@@ -12,3 +12,8 @@ class UserModel(BaseDocument):
     status: UserStatus = UserStatus.ACTIVE
     is_email_verified: bool = False
     last_login: Optional[datetime] = None
+    assigned_kendra_id: Optional[str] = Field(
+        default=None,
+        description="For PHARMACY-role users: which Kendra they manage. "
+                    "Set manually by an Admin (e.g. via database) for now."
+    )
