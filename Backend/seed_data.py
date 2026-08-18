@@ -11,6 +11,7 @@ import asyncio
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.core.config import settings
+from app.utils.password import hash_password
 
 medicines = [
     {"pmbi_code": "PAR500", "generic_name": "Paracetamol 500mg", "brand_name": "Crocin 500mg", "composition": "Paracetamol 500mg", "category": "Analgesic", "jan_aushadhi_mrp": 3.84, "branded_avg_mrp": 28, "saving_pct": 86, "pack_size": "Strip of 15", "manufacturer": "Aurobindo Pharma Ltd."},
@@ -161,6 +162,35 @@ async def seed():
 
     result2 = await db["kendras"].insert_many(kendras)
     print(f"Kendras seeded: {len(result2.inserted_ids)}")
+
+    # ── Test login accounts, one per role ───────────────────────────────
+    # The register API only ever creates USER accounts, so PHARMACY/ADMIN
+    # accounts can only exist via seeding (or manual DB insert) until a
+    # proper pharmacy registration/approval flow exists. The pharmacy
+    # account is linked to a Kendra via assigned_kendra_id — that's the
+    # only ownership link the backend checks now (see
+    # kendra_service.py::_verify_kendra_ownership).
+    # Password for all three: Test@1234
+    first_kendra_id = str(result2.inserted_ids[0])
+    test_users = [
+        {"full_name": "Demo Customer",       "email": "user@test.com",     "phone_number": "9876543210", "role": "USER",     "assigned_kendra_id": None},
+        {"full_name": "Demo Pharmacy Owner", "email": "pharmacy@test.com", "phone_number": "9876543211", "role": "PHARMACY", "assigned_kendra_id": first_kendra_id},
+        {"full_name": "Demo Admin",          "email": "admin@test.com",    "phone_number": "9876543212", "role": "ADMIN",    "assigned_kendra_id": None},
+    ]
+    await db["users"].delete_many({"email": {"$in": [u["email"] for u in test_users]}})
+    for u in test_users:
+        u["hashed_password"] = hash_password("Test@1234")
+        u["status"] = "ACTIVE"
+        u["is_email_verified"] = True
+        u["last_login"] = None
+        u["created_at"] = now
+        u["updated_at"] = now
+    await db["users"].insert_many(test_users)
+    print(f"Test users seeded: {len(test_users)}")
+    print(f"Linked '{kendras[0]['name']}' to pharmacy@test.com (assigned_kendra_id)")
+    print("  Login with any of these (password: 'Test@1234' for all):")
+    for u in test_users:
+        print(f"    {u['role']:10s} -> {u['email']}")
 
     client.close()
     print("Done! Your database is ready.")

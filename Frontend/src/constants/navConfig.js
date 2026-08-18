@@ -18,6 +18,8 @@ import {
   HiOutlineChartBar,
   HiOutlineCog6Tooth,
   HiOutlineClipboardDocument,
+  HiOutlineArchiveBox,
+  HiOutlineExclamationTriangle,
   HiOutlineDocumentText,
   HiOutlineReceiptPercent,
 } from 'react-icons/hi2'
@@ -59,6 +61,8 @@ export const ADMIN_NAV = [
   { type: 'item',  label: 'Users',           to: ROUTES.ADMIN.USERS,         icon: HiOutlineUsers },
   { type: 'item',  label: 'Pharmacies',      to: ROUTES.ADMIN.PHARMACIES,    icon: MdLocalPharmacy },
   { type: 'item',  label: 'Medicines',       to: ROUTES.ADMIN.MEDICINES,     icon: MdMedication },
+  { type: 'item',  label: 'Inventory',       to: ROUTES.ADMIN.INVENTORY,     icon: HiOutlineArchiveBox },
+  { type: 'item',  label: 'Expiry Monitor',  to: ROUTES.ADMIN.EXPIRY,        icon: HiOutlineExclamationTriangle },
   { type: 'item',  label: 'Generic Mapping', to: ROUTES.ADMIN.GENERIC_MAP,   icon: HiOutlineClipboardDocument },
   { type: 'group', label: 'Analytics' },
   { type: 'item',  label: 'Analytics',       to: ROUTES.ADMIN.ANALYTICS,     icon: MdAnalytics },

@@ -2,36 +2,27 @@
  * Component: InteractiveMapSection
  *
  * Description:
- *   React Leaflet interactive map displaying pharmacy locations
- *   and user position using placeholder coordinates.
+ *   React Leaflet interactive map displaying real nearby Kendra
+ *   locations and the user's actual (or fallback) position.
  *
- * Responsibilities:
- *   - Render a Leaflet MapContainer with TileLayer (OpenStreetMap)
- *   - User location marker (blue circle)
- *   - Pharmacy markers (green = Jan Aushadhi, blue = regular)
- *   - Selected pharmacy highlighted marker
- *   - Map controls: zoom, Locate Me placeholder, Reset View
- *   - Map legend
- *
- * Important:
- *   All coordinates are hardcoded Mumbai placeholders.
- *   Do NOT connect to any real GPS or pharmacy API.
- *   TODO: replace with Geolocation API + GET /api/v1/pharmacies/nearby
+ * Backend integration:
+ *   pharmacies/center come from the parent (NearbyPharmaciesPage), which
+ *   fetches GET /kendras/nearby and useGeolocation() — this component no
+ *   longer has its own placeholder data, so marker ids now match real
+ *   Kendra ids and clicking one correctly loads that Kendra's real
+ *   details in PharmacyDetailsPanel / NavigationPreview.
  *
  * Dependencies:
- *   - react-leaflet (already installed in Module 1A)
- *   - leaflet (already installed)
+ *   - react-leaflet, leaflet
  *   - Leaflet CSS imported in index.css
  */
 
-import { useState } from 'react'
 import {
   MapContainer, TileLayer, Marker, Popup, Circle, useMap,
 } from 'react-leaflet'
 import L from 'leaflet'
 import {
   HiOutlineMapPin, HiOutlineArrowPath,
-  HiOutlineMagnifyingGlassPlus,
 } from 'react-icons/hi2'
 
 // ── Fix Leaflet default icon path issue with Vite bundler ──────────────────
@@ -71,19 +62,6 @@ const selectedIcon = new L.DivIcon({
   popupAnchor: [0, -20],
 })
 
-// =======================================================
-// Placeholder pharmacy coordinates (Mumbai area)
-// TODO: Replace with GET /api/v1/pharmacies/nearby?lat=...&lng=...
-// =======================================================
-const PLACEHOLDER_USER_LOCATION = [19.1297, 72.8464]  // Andheri West
-const PLACEHOLDER_PHARMACIES = [
-  { id: 'p1', name: 'Jan Aushadhi Kendra — Andheri',  lat: 19.1320, lng: 72.8490, isJanAushadhi: true,  isOpen: true,  distance: '0.8 km' },
-  { id: 'p2', name: 'Shree Medical Store',             lat: 19.1270, lng: 72.8440, isJanAushadhi: false, isOpen: true,  distance: '1.2 km' },
-  { id: 'p3', name: 'Jan Aushadhi Kendra — Versova',   lat: 19.1350, lng: 72.8400, isJanAushadhi: true,  isOpen: true,  distance: '1.6 km' },
-  { id: 'p4', name: 'Apollo Pharmacy',                 lat: 19.1240, lng: 72.8510, isJanAushadhi: false, isOpen: false, distance: '1.9 km' },
-  { id: 'p5', name: 'Jan Aushadhi Kendra — Juhu',      lat: 19.1200, lng: 72.8380, isJanAushadhi: true,  isOpen: true,  distance: '2.4 km' },
-]
-
 // ── Reset view button (inside the map) ────────────────────────────────────
 function ResetViewControl({ center, zoom }) {
   const map = useMap()
@@ -103,9 +81,11 @@ function ResetViewControl({ center, zoom }) {
 // =======================================================
 // Interactive Map Section
 // =======================================================
-function InteractiveMapSection({ selectedPharmacyId, onSelectPharmacy }) {
-  const CENTER = PLACEHOLDER_USER_LOCATION
-  const ZOOM   = 14
+function InteractiveMapSection({ selectedPharmacyId, onSelectPharmacy, pharmacies = [], center }) {
+  const CENTER = center ?? [12.3052, 76.6551] // Mysuru fallback, matches useGeolocation's default
+  const ZOOM   = 13
+
+  const markers = pharmacies.filter((p) => p.latitude != null && p.longitude != null)
 
   return (
     <section aria-labelledby="map-heading">
@@ -122,18 +102,6 @@ function InteractiveMapSection({ selectedPharmacyId, onSelectPharmacy }) {
               Interactive Map
             </h2>
           </div>
-
-          {/* Locate Me placeholder */}
-          <button
-            type="button"
-            aria-label="Locate my position (requires location permission)"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-secondary-300 text-secondary-700 text-xs font-medium hover:bg-secondary-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-500"
-            onClick={() => {/* TODO: Geolocation API — navigator.geolocation.getCurrentPosition */}}
-          >
-            <HiOutlineMagnifyingGlassPlus size={13} aria-hidden="true" />
-            Locate Me
-            <span className="text-[10px] text-secondary-400">(placeholder)</span>
-          </button>
         </div>
 
         {/* Leaflet map */}
@@ -158,17 +126,15 @@ function InteractiveMapSection({ selectedPharmacyId, onSelectPharmacy }) {
             />
             <Marker position={CENTER}>
               <Popup>
-                <div className="text-xs font-semibold">📍 Your Location (Placeholder)</div>
-                <div className="text-[11px] text-slate-500">Andheri West, Mumbai</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">TODO: replace with GPS</div>
+                <div className="text-xs font-semibold">📍 Your Location</div>
               </Popup>
             </Marker>
 
-            {/* Pharmacy markers */}
-            {PLACEHOLDER_PHARMACIES.map((p) => (
+            {/* Pharmacy markers — real Kendras from the parent's GET /kendras/nearby */}
+            {markers.map((p) => (
               <Marker
                 key={p.id}
-                position={[p.lat, p.lng]}
+                position={[p.latitude, p.longitude]}
                 icon={
                   p.id === selectedPharmacyId
                     ? selectedIcon
@@ -214,7 +180,6 @@ function InteractiveMapSection({ selectedPharmacyId, onSelectPharmacy }) {
             Your Location
           </span>
           <span className="text-slate-400 ml-auto">
-            {/* TODO: tile layer attribution */}
             Map data © OpenStreetMap contributors
           </span>
         </div>
@@ -224,4 +189,3 @@ function InteractiveMapSection({ selectedPharmacyId, onSelectPharmacy }) {
 }
 
 export default InteractiveMapSection
-export { PLACEHOLDER_PHARMACIES, PLACEHOLDER_USER_LOCATION }

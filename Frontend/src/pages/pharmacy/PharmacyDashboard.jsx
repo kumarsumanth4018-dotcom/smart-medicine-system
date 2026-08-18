@@ -15,9 +15,9 @@
  * Route: /pharmacy/dashboard  (ProtectedRoute → PharmacyLayout)
  *
  * Backend readiness:
- *   All data is local placeholder. Replace with TanStack Query:
- *     useQuery(['pharmacy-stats'], () => inventoryService.getStats())
- *     useQuery(['inventory'], () => inventoryService.getAll())
+ *   All data is local placeholder. Wire up with TanStack Query against
+ *   kendraService (see InventoryPage.jsx / BillingPage.jsx for the pattern):
+ *     useQuery(['kendra', currentUser.assignedKendraId], () => kendraService.getById(id))
  */
 
 import { useState } from 'react'

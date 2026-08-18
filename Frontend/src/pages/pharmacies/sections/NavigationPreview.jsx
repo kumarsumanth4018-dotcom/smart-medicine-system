@@ -2,36 +2,44 @@
  * Component: NavigationPreview
  *
  * Description:
- *   Navigation card showing estimated distance, travel time, and
- *   placeholder buttons for Google Maps and in-app navigation.
+ *   Navigation card showing distance, travel time, and a real
+ *   "Open in Google Maps" link for the selected pharmacy.
  *
  * Backend readiness:
- *   - route → external Maps API (Google Maps / OpenRouteService)
- *   - delivery → POST /api/v1/pharmacies/:id/delivery-request
- *   All deferred to future module.
+ *   - "Open in Google Maps" uses the browser's own maps.google.com deep
+ *     link with the Kendra's real lat/lng (falls back to a text address
+ *     search if coordinates aren't available) - no backend needed.
+ *   - distance/travelTime are still the haversine-based estimate from
+ *     GET /kendras/nearby, not a real routing API.
+ *   - In-app turn-by-turn navigation (React Leaflet Routing) is still
+ *     a future module - that button stays a placeholder.
  */
 
 import { HiOutlineMapPin, HiOutlineTruck, HiOutlineArrowTopRightOnSquare } from 'react-icons/hi2'
-import Badge from '../../../components/ui/Badge'
 
 // =======================================================
 // Navigation Preview
 // =======================================================
 function NavigationPreview({ pharmacy = {} }) {
   const {
-    name      = 'Jan Aushadhi Kendra — Andheri West',
-    distance  = '0.8 km',
-    travelTime= '~10 min walk',
-    address   = '12, Veera Desai Road, Andheri West, Mumbai',
+    distance   = '-',
+    travelTime = '-',
+    address    = 'Select a pharmacy from the list to preview navigation',
+    latitude,
+    longitude,
   } = pharmacy
 
+  const hasSelection = Boolean(pharmacy?.name)
+
   function handleOpenMaps() {
-    // TODO: open Google Maps with pharmacy coordinates
-    // window.open(`https://maps.google.com/?q=${lat},${lng}`, '_blank')
+    const url = (latitude != null && longitude != null)
+      ? `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   function handleOpenNavigation() {
-    // TODO: in-app navigation using React Leaflet Routing
+    // TODO: in-app navigation using React Leaflet Routing Machine
   }
 
   return (
@@ -42,7 +50,6 @@ function NavigationPreview({ pharmacy = {} }) {
           <h2 id="navigation-heading" className="text-base font-bold text-slate-900">
             Navigation Preview
           </h2>
-          <Badge variant="neutral" size="sm">Placeholder</Badge>
         </div>
 
         {/* Stats */}
@@ -51,7 +58,6 @@ function NavigationPreview({ pharmacy = {} }) {
             <HiOutlineMapPin size={20} className="text-secondary-600 mb-1" aria-hidden="true" />
             <p className="text-[10px] text-secondary-500 uppercase tracking-wider">Distance</p>
             <p className="text-xl font-extrabold text-secondary-700">
-              {/* TODO: from route calculation API */}
               {distance}
             </p>
           </div>
@@ -59,7 +65,6 @@ function NavigationPreview({ pharmacy = {} }) {
             <HiOutlineTruck size={20} className="text-primary-600 mb-1" aria-hidden="true" />
             <p className="text-[10px] text-primary-500 uppercase tracking-wider">Travel Time</p>
             <p className="text-xl font-extrabold text-primary-700">
-              {/* TODO: from route calculation API */}
               {travelTime}
             </p>
           </div>
@@ -74,12 +79,12 @@ function NavigationPreview({ pharmacy = {} }) {
           <button
             type="button"
             onClick={handleOpenMaps}
+            disabled={!hasSelection}
             aria-label="Open pharmacy location in Google Maps"
-            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-secondary-600 text-white text-sm font-semibold hover:bg-secondary-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-500"
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-secondary-600 text-white text-sm font-semibold hover:bg-secondary-700 transition-colors disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-500"
           >
             <HiOutlineArrowTopRightOnSquare size={15} aria-hidden="true" />
             Open in Google Maps
-            <span className="text-[10px] text-secondary-300">(placeholder)</span>
           </button>
 
           <button

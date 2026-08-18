@@ -52,6 +52,8 @@ export const ROUTES = {
     USERS:        '/admin/users',
     PHARMACIES:   '/admin/pharmacies',
     MEDICINES:    '/admin/medicines',
+    INVENTORY:    '/admin/inventory',
+    EXPIRY:       '/admin/expiry',
     GENERIC_MAP:  '/admin/generic-mapping',
     ANALYTICS:    '/admin/analytics',
     REPORTS:      '/admin/reports',

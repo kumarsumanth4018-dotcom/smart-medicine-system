@@ -79,6 +79,8 @@ function NearbyPharmaciesPage() {
         id: k.id,
         name: k.name,
         address: k.address,
+        latitude: k.latitude,
+        longitude: k.longitude,
         distance: `${k.distance_km} km`,
         travelTime: `~${Math.max(1, Math.round(k.distance_km * 2))} min drive`,
         phone: k.phone,
@@ -92,6 +94,11 @@ function NearbyPharmaciesPage() {
       }
     })
   }, [kendrasQuery.data, pmbiCode])
+
+  const selectedPharmacy = useMemo(
+    () => pharmacies.find((p) => p.id === selectedId),
+    [pharmacies, selectedId],
+  )
 
   function handleViewDetails(id) {
     setSelectedId(id)
@@ -122,6 +129,8 @@ function NearbyPharmaciesPage() {
       <InteractiveMapSection
         selectedPharmacyId={selectedId}
         onSelectPharmacy={setSelectedId}
+        pharmacies={pharmacies}
+        center={location ? [location.lat, location.lng] : undefined}
       />
 
       <Divider className="my-0" />
@@ -159,7 +168,7 @@ function NearbyPharmaciesPage() {
           {/* =======================================================
               Navigation Preview
              ======================================================= */}
-          <NavigationPreview />
+          <NavigationPreview pharmacy={selectedPharmacy} />
 
         </div>
 

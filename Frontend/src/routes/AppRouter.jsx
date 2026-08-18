@@ -114,6 +114,8 @@ const AdminDashboard      = lazy(() => import('../pages/admin/AdminDashboard'))
 const AdminUsers          = lazy(() => import('../pages/admin/AdminUsers'))
 const AdminPharmacies     = lazy(() => import('../pages/admin/AdminPharmacies'))
 const AdminMedicines      = lazy(() => import('../pages/admin/AdminMedicines'))
+const AdminInventory      = lazy(() => import('../pages/admin/AdminInventory'))
+const AdminExpiry         = lazy(() => import('../pages/admin/AdminExpiry'))
 const AdminGenericMapping = lazy(() => import('../pages/admin/AdminGenericMapping'))
 const AdminAnalytics      = lazy(() => import('../pages/admin/AdminAnalytics'))
 const AdminReports        = lazy(() => import('../pages/admin/AdminReports'))
@@ -200,6 +202,8 @@ function AppRouter() {
             <Route path="admin/users"             element={<AdminUsers />} />
             <Route path="admin/pharmacies"        element={<AdminPharmacies />} />
             <Route path="admin/medicines"         element={<AdminMedicines />} />
+            <Route path="admin/inventory"         element={<AdminInventory />} />
+            <Route path="admin/expiry"            element={<AdminExpiry />} />
             <Route path="admin/generic-mapping"   element={<AdminGenericMapping />} />
             <Route path="admin/analytics"         element={<AdminAnalytics />} />
             <Route path="admin/reports"           element={<AdminReports />} />
@@ -233,13 +237,13 @@ function AppRouter() {
           TODO: /api/v1/medicines/search        → medicineService.search()
           TODO: /api/v1/medicines/:id           → medicineService.getById()
           TODO: /api/v1/medicines/alternatives  → medicineService.getAlternatives()
-          TODO: /api/v1/pharmacies/nearby       → pharmacyService.getNearby()
+          TODO: /api/v1/pharmacies/nearby       → kendraService.findNearby() [implemented]
           TODO: /api/v1/auth/login              → authService.login()
           TODO: /api/v1/auth/register           → authService.register()
           TODO: /api/v1/auth/verify-otp         → authService.verifyOtp()
           TODO: /api/v1/users/me                → userService.getMe()
           TODO: /api/v1/users/me/notifications  → userService notifications
-          TODO: /api/v1/pharmacy/inventory      → inventoryService.getAll()
+          TODO: /api/v1/pharmacy/inventory      → kendraService.getById() + restock()/generateBill() [implemented]
           TODO: /api/v1/admin/*                 → admin portal APIs
           =====================================================
         */}
