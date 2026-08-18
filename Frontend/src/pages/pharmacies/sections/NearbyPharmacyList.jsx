@@ -221,7 +221,7 @@ function NearbyPharmacyCard({ pharmacy, isSelected, onSelect, onViewDetails, onR
 // =======================================================
 // Nearby Pharmacy List
 // =======================================================
-function NearbyPharmacyList({ selectedId, onSelect, onViewDetails, onReserve }) {
+function NearbyPharmacyList({ pharmacies = [], selectedId, onSelect, onViewDetails, onReserve }) {
   function handleViewOnMap(id) {
     onSelect?.(id)
     // Scroll to map is handled by the parent
@@ -239,29 +239,33 @@ function NearbyPharmacyList({ selectedId, onSelect, onViewDetails, onReserve }) 
             Nearby Pharmacies
           </h2>
           <Badge variant="primary" size="sm">
-            {/* TODO: count from API */}
-            {NEARBY_PHARMACIES.length} found
+            {pharmacies.length} found
           </Badge>
         </div>
 
-        <div className="flex flex-col gap-4" role="list" aria-label="Nearby pharmacy list">
-          {NEARBY_PHARMACIES.map((pharmacy) => (
-            <div key={pharmacy.id} role="listitem">
-              <NearbyPharmacyCard
-                pharmacy={pharmacy}
-                isSelected={pharmacy.id === selectedId}
-                onSelect={onSelect}
-                onViewDetails={onViewDetails}
-                onReserve={onReserve}
-                onViewOnMap={handleViewOnMap}
-              />
-            </div>
-          ))}
-        </div>
+        {pharmacies.length === 0 ? (
+          <p className="text-center py-10 text-sm text-slate-400">
+            No Jan Aushadhi Kendras found within range.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-4" role="list" aria-label="Nearby pharmacy list">
+            {pharmacies.map((pharmacy) => (
+              <div key={pharmacy.id} role="listitem">
+                <NearbyPharmacyCard
+                  pharmacy={pharmacy}
+                  isSelected={pharmacy.id === selectedId}
+                  onSelect={onSelect}
+                  onViewDetails={onViewDetails}
+                  onReserve={onReserve}
+                  onViewOnMap={handleViewOnMap}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   )
 }
 
-export { NEARBY_PHARMACIES }
 export default NearbyPharmacyList

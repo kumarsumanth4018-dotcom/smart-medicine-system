@@ -10,6 +10,7 @@
  *   - availability → GET /api/v1/pharmacies/:id/inventory?medicine=...
  */
 
+import { useQuery } from '@tanstack/react-query'
 import {
   HiOutlineMapPin, HiOutlinePhone, HiOutlineClock,
   HiOutlineStar, HiOutlineBanknotes,
@@ -17,14 +18,10 @@ import {
 } from 'react-icons/hi2'
 import { MdLocalPharmacy, MdAccessible, MdDirectionsCar } from 'react-icons/md'
 import Badge from '../../../components/ui/Badge'
+import kendraService from '../../../services/kendraService'
+import medicineService from '../../../services/medicineService'
 
 const PAYMENT_METHODS = ['Cash', 'UPI', 'Debit Card', 'Jan Aushadhi Scheme']
-
-const AVAILABILITY_ROWS = [
-  { medicine: 'Paracetamol IP 500mg (Generic)', status: 'available',   batch: 'BAT-2025-07', expiry: 'Dec 2026' },
-  { medicine: 'Crocin 500 (Branded)',           status: 'limited',     batch: 'BAT-2025-06', expiry: 'Oct 2026' },
-  { medicine: 'Paracetamol IP 650mg (Generic)', status: 'unavailable', batch: '—',           expiry: '—'        },
-]
 
 const STATUS_ICON = {
   available:   <HiOutlineCheckCircle   size={15} className="text-success-500" aria-hidden="true" />,
@@ -36,11 +33,25 @@ const STATUS_CONFIG = {
   limited:     { variant: 'warning', label: 'Limited'       },
   unavailable: { variant: 'danger',  label: 'Out of Stock'  },
 }
+const BACKEND_STATUS_MAP = { in_stock: 'available', low_stock: 'limited', out_of_stock: 'unavailable' }
 
 // =======================================================
 // Pharmacy Details Panel
 // =======================================================
 function PharmacyDetailsPanel({ pharmacyId }) {
+  const kendraQuery = useQuery({
+    queryKey: ['kendra', pharmacyId],
+    queryFn: async () => (await kendraService.getById(pharmacyId)).data,
+    enabled: !!pharmacyId,
+  })
+
+  // Shared with InventoryPage/BillingPage — TanStack Query caches this once.
+  const medicinesQuery = useQuery({
+    queryKey: ['medicines', 'all-for-billing'],
+    queryFn: async () => (await medicineService.getAll({ page: 1, page_size: 200 })).data.results,
+    enabled: !!pharmacyId,
+  })
+
   if (!pharmacyId) {
     return (
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center">
@@ -51,21 +62,51 @@ function PharmacyDetailsPanel({ pharmacyId }) {
     )
   }
 
-  // TODO: fetch pharmacy by pharmacyId from GET /api/v1/pharmacies/:id
+  if (kendraQuery.isLoading || medicinesQuery.isLoading) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center">
+        <p className="text-sm text-slate-400">Loading pharmacy details…</p>
+      </div>
+    )
+  }
+
+  if (kendraQuery.isError || !kendraQuery.data) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center">
+        <p className="text-sm text-danger-600">Couldn't load this pharmacy's details.</p>
+      </div>
+    )
+  }
+
+  const k = kendraQuery.data
+  const medicineMap = new Map((medicinesQuery.data ?? []).map((m) => [m.pmbi_code, m]))
+
   const pharmacy = {
-    id: pharmacyId,
-    name: 'Jan Aushadhi Kendra — Andheri West',
-    address: '12, Veera Desai Road, Andheri West, Mumbai 400053',
-    phone: '+91 98765 43210',
-    hours: '8:00 AM – 9:00 PM',
-    rating: 4.5,
-    ratingCount: 128,
+    id: k.id,
+    name: k.name,
+    address: k.address,
+    phone: k.phone,
+    hours: 'Contact for hours', // not tracked by the backend yet
+    rating: k.rating ?? 0,
+    ratingCount: 0,
     isOpen: true,
     isJanAushadhi: true,
-    waitingTime: '~10 minutes',
+    waitingTime: '~10 minutes', // not tracked by the backend yet
     hasParking: true,
     isAccessible: true,
   }
+
+  const availabilityRows = (k.stock ?? []).slice(0, 8).map((item) => {
+    const med = medicineMap.get(item.pmbi_code)
+    return {
+      medicine: med ? `${med.brand_name} (${med.generic_name})` : item.pmbi_code,
+      status: BACKEND_STATUS_MAP[item.status] ?? 'unavailable',
+      batch: item.batches?.[0]?.batch_number ?? '—',
+      expiry: item.batches?.[0]?.expiry_date
+        ? new Date(item.batches[0].expiry_date).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+        : '—',
+    }
+  })
 
   return (
     <section aria-labelledby="pharmacy-details-heading">
@@ -120,7 +161,6 @@ function PharmacyDetailsPanel({ pharmacyId }) {
             </div>
             <div className="flex items-center gap-2">
               <HiOutlineClock size={13} className="text-warning-500 shrink-0" aria-hidden="true" />
-              {/* TODO: estimated waiting time from API */}
               Estimated wait: {pharmacy.waitingTime}
             </div>
           </div>
@@ -148,24 +188,27 @@ function PharmacyDetailsPanel({ pharmacyId }) {
           {/* Medicine availability table */}
           <div>
             <p className="text-xs font-semibold text-slate-700 mb-2">Medicine Availability</p>
-            <div className="rounded-xl border border-slate-100 overflow-hidden">
-              {AVAILABILITY_ROWS.map((row) => {
-                const cfg = STATUS_CONFIG[row.status] ?? STATUS_CONFIG.available
-                return (
-                  <div key={row.medicine} className="flex items-center justify-between px-3 py-2.5 border-b border-slate-50 last:border-0 text-xs">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      {STATUS_ICON[row.status]}
-                      <span className="truncate text-slate-700">{row.medicine}</span>
+            {availabilityRows.length === 0 ? (
+              <p className="text-xs text-slate-400">No stock data available for this Kendra.</p>
+            ) : (
+              <div className="rounded-xl border border-slate-100 overflow-hidden">
+                {availabilityRows.map((row) => {
+                  const cfg = STATUS_CONFIG[row.status] ?? STATUS_CONFIG.available
+                  return (
+                    <div key={row.medicine} className="flex items-center justify-between px-3 py-2.5 border-b border-slate-50 last:border-0 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {STATUS_ICON[row.status]}
+                        <span className="truncate text-slate-700">{row.medicine}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <Badge variant={cfg.variant} size="sm">{cfg.label}</Badge>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <Badge variant={cfg.variant} size="sm">{cfg.label}</Badge>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+            )}
             <p className="text-[10px] text-slate-400 mt-1.5">
-              {/* TODO: stock data from GET /api/v1/pharmacies/:id/inventory */}
               Availability is indicative. Confirm with pharmacy before visiting.
             </p>
           </div>

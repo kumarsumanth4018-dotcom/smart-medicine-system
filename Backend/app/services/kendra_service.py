@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from datetime import datetime, timezone
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import HTTPException, status
@@ -10,6 +11,25 @@ from app.utils.geo import haversine_km
 from app.utils.logger import logger
 
 DEFAULT_RADIUS_KM = 5.0
+
+
+async def _verify_kendra_ownership(kendra_id: str, current_user) -> None:
+    """
+    ADMIN can manage any Kendra. PHARMACY users can only manage the
+    single Kendra they're assigned to (assigned_kendra_id on their
+    user document). Looked up fresh from the DB rather than trusting
+    the JWT, since the token doesn't carry assigned_kendra_id.
+    """
+    if current_user.role == "ADMIN":
+        return
+
+    db = get_database()
+    user = await db.users.find_one({"email": current_user.sub})
+    if not user or user.get("assigned_kendra_id") != kendra_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not manage this Kendra.",
+        )
 
 
 def _to_object_id(kendra_id: str) -> ObjectId:
@@ -30,7 +50,6 @@ def _serialize_kendra(doc: dict, distance_km: float | None = None) -> dict:
         "address": doc["address"],
         "phone": doc.get("phone"),
         "rating": doc.get("rating"),
-        "owner_email": doc.get("owner_email"),
         "longitude": coords[0],
         "latitude": coords[1],
         "distance_km": distance_km,
@@ -73,24 +92,6 @@ async def get_kendra_by_id(kendra_id: str) -> dict:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Kendra not found.",
-        )
-
-    return _serialize_kendra(doc)
-
-
-async def get_kendra_by_owner(owner_email: str) -> dict:
-    """
-    Fetch the single Kendra managed by the logged-in pharmacy owner.
-    Used by the Pharmacy Dashboard to know which Kendra it's operating on
-    without the frontend having to know/store a kendra_id separately.
-    """
-    db = get_database()
-
-    doc = await db[KENDRAS_COLLECTION].find_one({"owner_email": owner_email})
-    if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No Kendra is linked to this pharmacy owner account yet.",
         )
 
     return _serialize_kendra(doc)
@@ -156,23 +157,7 @@ def compute_stock_status(quantity: int) -> str:
     return "in_stock"
 
 
-def _assert_owns_kendra(kendra: dict, requester_email: str, requester_role: str) -> None:
-    """Admins may manage any Kendra; pharmacy owners only their own."""
-    if requester_role == "admin":
-        return
-    if kendra.get("owner_email") != requester_email:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not manage this Kendra.",
-        )
-
-
-async def restock_medicine(
-    kendra_id: str,
-    data: RestockRequest,
-    requester_email: str,
-    requester_role: str,
-) -> dict:
+async def restock_medicine(kendra_id: str, data: RestockRequest, current_user=None) -> dict:
     """
     Add a new batch of stock arriving from the supplier (Pharmacy Owner).
     This is separate from billing — it only ever ADDS stock.
@@ -180,13 +165,15 @@ async def restock_medicine(
     db = get_database()
     object_id = _to_object_id(kendra_id)
 
+    if current_user is not None:
+        await _verify_kendra_ownership(kendra_id, current_user)
+
     kendra = await db[KENDRAS_COLLECTION].find_one({"_id": object_id})
     if not kendra:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Kendra not found.",
         )
-    _assert_owns_kendra(kendra, requester_email, requester_role)
 
     stock = kendra.get("stock", [])
     new_batch = {
@@ -265,12 +252,7 @@ def _deduct_fifo(batches: list, quantity_needed: int) -> tuple[list, list]:
     return result_batches, deduction_log
 
 
-async def generate_bill(
-    kendra_id: str,
-    data: BillRequest,
-    requester_email: str,
-    requester_role: str,
-) -> dict:
+async def generate_bill(kendra_id: str, data: BillRequest, current_user=None) -> dict:
     """
     Generate a bill for one or more medicines sold.
     For each line item: deducts stock FIFO (oldest expiry first),
@@ -279,13 +261,15 @@ async def generate_bill(
     db = get_database()
     object_id = _to_object_id(kendra_id)
 
+    if current_user is not None:
+        await _verify_kendra_ownership(kendra_id, current_user)
+
     kendra = await db[KENDRAS_COLLECTION].find_one({"_id": object_id})
     if not kendra:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Kendra not found.",
         )
-    _assert_owns_kendra(kendra, requester_email, requester_role)
 
     stock = kendra.get("stock", [])
     line_items = []

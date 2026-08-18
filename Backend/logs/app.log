@@ -148,3 +148,12 @@
 2026-08-17 17:08:41,560 | INFO | MongoDB connected successfully.
 2026-08-17 17:09:26,216 | INFO | User logged in successfully: pharmacy@test.com
 2026-08-17 17:11:03,379 | INFO | MongoDB connection closed.
+2026-08-18 08:59:50,473 | INFO | MongoDB connected successfully.
+2026-08-18 09:11:50,032 | INFO | User logged in successfully: pharmacy@test.com
+2026-08-18 09:18:08,730 | INFO | MongoDB connection closed.
+2026-08-18 09:19:01,106 | INFO | MongoDB connected successfully.
+2026-08-18 09:19:31,016 | INFO | Bill generated at kendra 6a815d68e9e6ce1b229e4deb: 6a83d64b6d09d9081aa0181d, total ₹3.84
+2026-08-18 09:20:00,118 | INFO | MongoDB connection closed.
+2026-08-18 09:28:39,872 | INFO | MongoDB connected successfully.
+2026-08-18 09:29:46,058 | INFO | User logged in successfully: sumupoojary0@gmail.com
+2026-08-18 09:31:24,804 | INFO | MongoDB connection closed.

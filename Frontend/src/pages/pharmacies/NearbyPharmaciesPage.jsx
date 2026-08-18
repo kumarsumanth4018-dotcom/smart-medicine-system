@@ -20,7 +20,9 @@
  *   All API integrations deferred to Module 10.
  */
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import PharmacySearchSummary    from './sections/PharmacySearchSummary'
 import InteractiveMapSection    from './sections/InteractiveMapSection'
 import NearbyPharmacyList       from './sections/NearbyPharmacyList'
@@ -31,16 +33,65 @@ import PharmacyWorkflowTimeline from './sections/PharmacyWorkflowTimeline'
 import PharmacyTips             from './sections/PharmacyTips'
 import HealthcareDisclaimer     from '../medicine/sections/HealthcareDisclaimer'
 import Divider                  from '../../components/ui/Divider'
+import { useGeolocation } from '../../hooks/useGeolocation'
+import kendraService from '../../services/kendraService'
 
-// Placeholder medicine context
-// TODO: read from URL search params or React context
-const PLACEHOLDER_MEDICINE = {
-  name:        'Crocin 500',
-  genericName: 'Paracetamol IP 500mg',
-}
+const DEFAULT_RADIUS_KM = 10
 
 function NearbyPharmaciesPage() {
   const [selectedId, setSelectedId] = useState(null)
+  const [searchParams] = useSearchParams()
+
+  // Optional: page can be reached with ?pmbi_code=PAR500&name=...&genericName=...
+  // (e.g. from "Nearby Pharmacy Preview" on a medicine's detail page).
+  // Without it, this page just browses all nearby Kendras.
+  const pmbiCode    = searchParams.get('pmbi_code')
+  const medicine     = {
+    name:        searchParams.get('name') ?? 'All Jan Aushadhi Kendras',
+    genericName: searchParams.get('genericName') ?? '',
+  }
+
+  const { location, status: locationStatus } = useGeolocation()
+
+  const kendrasQuery = useQuery({
+    queryKey: ['kendras', 'nearby', location?.lat, location?.lng],
+    queryFn: async () => (
+      await kendraService.findNearby(location.lat, location.lng, DEFAULT_RADIUS_KM)
+    ).data,
+    enabled: !!location,
+  })
+
+  // Map backend Kendra shape -> what NearbyPharmacyList / PharmacyDetailsPanel expect
+  const pharmacies = useMemo(() => {
+    const results = kendrasQuery.data?.results ?? []
+    return results.map((k) => {
+      const stockItem = pmbiCode
+        ? (k.stock ?? []).find((s) => s.pmbi_code === pmbiCode)
+        : null
+
+      const availability = !pmbiCode
+        ? 'available' // no specific medicine selected — browse mode, nothing to flag
+        : stockItem
+          ? { in_stock: 'available', low_stock: 'limited', out_of_stock: 'unavailable' }[stockItem.status]
+          : 'unavailable' // this Kendra doesn't carry the medicine at all
+
+      return {
+        id: k.id,
+        name: k.name,
+        address: k.address,
+        distance: `${k.distance_km} km`,
+        travelTime: `~${Math.max(1, Math.round(k.distance_km * 2))} min drive`,
+        phone: k.phone,
+        hours: 'Contact for hours',
+        isOpen: true,
+        isJanAushadhi: true,
+        availability,
+        rating: k.rating ?? 0,
+        ratingCount: 0,
+        stock: k.stock ?? [],
+      }
+    })
+  }, [kendrasQuery.data, pmbiCode])
 
   function handleViewDetails(id) {
     setSelectedId(id)
@@ -48,7 +99,6 @@ function NearbyPharmaciesPage() {
 
   function handleReserve(pharmacyId) {
     setSelectedId(pharmacyId)
-    // Scroll to reservation section
     document.getElementById('reservation-section')?.scrollIntoView({ behavior: 'smooth' })
   }
 
@@ -58,7 +108,13 @@ function NearbyPharmaciesPage() {
       {/* =======================================================
           Pharmacy Search Summary
          ======================================================= */}
-      <PharmacySearchSummary medicine={PLACEHOLDER_MEDICINE} pharmacyCount={8} />
+      <PharmacySearchSummary medicine={medicine} pharmacyCount={pharmacies.length} />
+
+      {locationStatus === 'fallback' && (
+        <div className="px-4 py-2.5 rounded-xl bg-warning-50 text-warning-700 text-xs">
+          Couldn't access your exact location — showing results near Mysuru instead. You can allow location access in your browser to see pharmacies near you.
+        </div>
+      )}
 
       {/* =======================================================
           Interactive Map
@@ -79,12 +135,19 @@ function NearbyPharmaciesPage() {
           {/* =======================================================
               Nearby Pharmacies
              ======================================================= */}
-          <NearbyPharmacyList
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onViewDetails={handleViewDetails}
-            onReserve={handleReserve}
-          />
+          {kendrasQuery.isLoading ? (
+            <p className="text-center py-10 text-sm text-slate-400">Finding nearby Kendras…</p>
+          ) : kendrasQuery.isError ? (
+            <p className="text-center py-10 text-sm text-danger-600">Couldn't load nearby pharmacies. Try again.</p>
+          ) : (
+            <NearbyPharmacyList
+              pharmacies={pharmacies}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onViewDetails={handleViewDetails}
+              onReserve={handleReserve}
+            />
+          )}
 
           {/* =======================================================
               Reservation Placeholder
