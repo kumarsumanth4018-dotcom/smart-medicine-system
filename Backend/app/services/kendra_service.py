@@ -105,46 +105,101 @@ async def find_medicine_availability(
     only_in_stock: bool = True,
 ) -> list:
     """
-    Find Kendras near the given point that stock a specific medicine
-    (by pmbi_code), sorted by distance. This is the core
-    location-based pharmacy finding feature from the SRS.
+    Find nearby Kendras that stock a specific medicine.
+
+    Results are sorted by distance and include stock,
+    batch, manufacturer and expiry information.
     """
+
     db = get_database()
 
-    cursor = db[KENDRAS_COLLECTION].find({
-        "is_active": {"$ne": False},
-        "stock.pmbi_code": pmbi_code,
-    })
+    cursor = db[KENDRAS_COLLECTION].find(
+        {
+            "is_active": {"$ne": False},
+            "stock.pmbi_code": pmbi_code,
+        }
+    )
 
     results = []
+
     async for doc in cursor:
         coords = doc["location"]["coordinates"]
-        dist = haversine_km(lat, lng, coords[1], coords[0])
-        if dist > radius_km:
+
+        distance = haversine_km(
+            lat,
+            lng,
+            coords[1],
+            coords[0],
+        )
+
+        if distance > radius_km:
             continue
 
         stock_item = next(
-            (s for s in doc.get("stock", []) if s["pmbi_code"] == pmbi_code),
+            (
+                item
+                for item in doc.get("stock", [])
+                if item["pmbi_code"] == pmbi_code
+            ),
             None,
         )
+
         if not stock_item:
             continue
-        if only_in_stock and stock_item["total_qty"] <= 0:
+
+        total_quantity = stock_item.get("total_qty", 0)
+
+        if only_in_stock and total_quantity <= 0:
             continue
 
-        results.append({
-            "kendra_id": str(doc["_id"]),
-            "kendra_name": doc["name"],
-            "address": doc["address"],
-            "phone": doc.get("phone"),
-            "latitude": coords[1],
-            "longitude": coords[0],
-            "distance_km": dist,
-            "total_qty": stock_item["total_qty"],
-            "status": stock_item["status"],
-        })
+        active_batches = sorted(
+            [
+                batch
+                for batch in stock_item.get("batches", [])
+                if batch.get("quantity", 0) > 0
+            ],
+            key=lambda batch: batch["expiry_date"],
+        )
 
-    results.sort(key=lambda r: r["distance_km"])
+        batch_information = [
+            {
+                "batch_number": batch["batch_number"],
+                "manufacturer": batch["manufacturer"],
+                "expiry_date": batch["expiry_date"],
+                "quantity": batch["quantity"],
+            }
+            for batch in active_batches
+        ]
+
+        nearest_expiry = (
+            active_batches[0]["expiry_date"]
+            if active_batches
+            else None
+        )
+
+        results.append(
+            {
+                "kendra_id": str(doc["_id"]),
+                "kendra_name": doc["name"],
+                "address": doc["address"],
+                "phone": doc.get("phone"),
+                "latitude": coords[1],
+                "longitude": coords[0],
+                "distance_km": round(distance, 2),
+                "total_qty": total_quantity,
+                "status": stock_item.get(
+                    "status",
+                    "out_of_stock",
+                ),
+                "nearest_expiry": nearest_expiry,
+                "batches": batch_information,
+            }
+        )
+
+    results.sort(
+        key=lambda result: result["distance_km"]
+    )
+
     return results
 
 

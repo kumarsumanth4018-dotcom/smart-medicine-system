@@ -171,3 +171,47 @@
 2026-08-18 16:29:36,939 | INFO | User logged in successfully: admin@test.com
 2026-08-18 16:31:17,825 | INFO | MongoDB connection closed.
 2026-08-18 16:37:29,538 | INFO | MongoDB connected successfully.
+2026-08-18 16:53:47,492 | INFO | MongoDB connection closed.
+2026-08-18 16:53:50,991 | INFO | MongoDB connected successfully.
+2026-08-18 16:54:12,843 | INFO | MongoDB connection closed.
+2026-08-18 16:54:14,958 | INFO | MongoDB connected successfully.
+2026-08-18 16:54:39,860 | INFO | MongoDB connection closed.
+2026-08-18 16:54:42,431 | INFO | MongoDB connected successfully.
+2026-08-18 16:55:13,602 | INFO | MongoDB connection closed.
+2026-08-18 16:55:16,275 | INFO | MongoDB connected successfully.
+2026-08-18 16:58:40,782 | INFO | MongoDB connected successfully.
+2026-08-18 17:03:11,208 | INFO | 
+==================================================
+  OTP EMAIL (dev mode — not actually sent)
+  To:      testotp@gmail.com
+  Purpose: account verification
+  OTP:     426912
+  Valid for 10 minutes
+==================================================
+2026-08-18 17:03:11,208 | INFO | New user registered: testotp@gmail.com
+2026-08-18 21:00:16,619 | INFO | MongoDB connected successfully.
+2026-08-18 21:02:26,591 | INFO | 
+==================================================
+  OTP EMAIL (dev mode — not actually sent)
+  To:      kumarsumanth4018@gmail.com
+  Purpose: account verification
+  OTP:     051928
+  Valid for 10 minutes
+==================================================
+2026-08-18 21:02:26,592 | INFO | New user registered: kumarsumanth4018@gmail.com
+2026-08-18 21:02:41,704 | INFO | User logged in successfully: kumarsumanth4018@gmail.com
+2026-08-18 21:03:35,488 | INFO | MongoDB connection closed.
+2026-08-18 21:05:09,537 | INFO | MongoDB connected successfully.
+2026-08-18 21:18:34,370 | INFO | MongoDB connection closed.
+2026-08-18 22:08:19,918 | INFO | MongoDB connected successfully.
+2026-08-18 22:08:32,337 | INFO | MongoDB connection closed.
+2026-08-18 22:09:07,157 | INFO | MongoDB connected successfully.
+2026-08-18 22:11:19,399 | INFO | Registration OTP sent to: 4mt23ic051@mite.ac.in
+2026-08-18 22:14:51,390 | INFO | Email verified successfully: 4mt23ic051@mite.ac.in
+2026-08-18 22:19:53,662 | INFO | User logged in successfully: 4mt23ic051@mite.ac.in
+2026-08-18 22:31:54,274 | INFO | MongoDB connection closed.
+2026-08-18 22:31:59,111 | INFO | MongoDB connected successfully.
+2026-08-18 22:32:10,209 | INFO | MongoDB connection closed.
+2026-08-18 22:34:19,385 | INFO | MongoDB connected successfully.
+2026-08-18 22:34:24,842 | INFO | MongoDB connection closed.
+2026-08-18 22:35:23,661 | INFO | MongoDB connected successfully.

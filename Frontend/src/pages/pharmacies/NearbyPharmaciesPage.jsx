@@ -36,7 +36,7 @@ import Divider                  from '../../components/ui/Divider'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import kendraService from '../../services/kendraService'
 
-const DEFAULT_RADIUS_KM = 10
+const DEFAULT_RADIUS_KM = 50
 
 function NearbyPharmaciesPage() {
   const [selectedId, setSelectedId] = useState(null)
@@ -45,7 +45,9 @@ function NearbyPharmaciesPage() {
   // Optional: page can be reached with ?pmbi_code=PAR500&name=...&genericName=...
   // (e.g. from "Nearby Pharmacy Preview" on a medicine's detail page).
   // Without it, this page just browses all nearby Kendras.
-  const pmbiCode    = searchParams.get('pmbi_code')
+  const pmbiCode =
+  searchParams.get('medicine') ||
+  searchParams.get('pmbi_code')
   const medicine     = {
     name:        searchParams.get('name') ?? 'All Jan Aushadhi Kendras',
     genericName: searchParams.get('genericName') ?? '',

@@ -25,7 +25,10 @@ const LENGTH = 6
 function OtpInput({ value = '', onChange, disabled = false, hasError = false }) {
   const inputRefs = useRef([])
 
-  const digits = value.padEnd(LENGTH, '').split('').slice(0, LENGTH)
+  const digits = Array.from(
+  { length: LENGTH },
+  (_, index) => value[index] || '',
+)
 
   function handleChange(e, index) {
     const char = e.target.value.replace(/\D/g, '').slice(-1)

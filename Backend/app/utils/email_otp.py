@@ -9,12 +9,12 @@ from app.core.config import settings
 
 
 def generate_otp() -> str:
-    """Generate a cryptographically secure six-digit OTP."""
+    """Generate a secure six-digit OTP."""
     return f"{secrets.randbelow(1_000_000):06d}"
 
 
 def hash_otp(otp: str) -> str:
-    """Hash an OTP using the application's secret key."""
+    """Hash the OTP before saving it in MongoDB."""
     return hmac.new(
         settings.SECRET_KEY.encode("utf-8"),
         otp.encode("utf-8"),
@@ -23,11 +23,11 @@ def hash_otp(otp: str) -> str:
 
 
 def verify_otp_hash(otp: str, saved_hash: str) -> bool:
-    """Safely compare the submitted OTP with the saved hash."""
-    submitted_hash = hash_otp(otp)
+    """Compare an entered OTP with the saved OTP hash."""
+    entered_hash = hash_otp(otp)
 
     return hmac.compare_digest(
-        submitted_hash,
+        entered_hash,
         saved_hash,
     )
 
@@ -37,7 +37,7 @@ async def send_registration_otp(
     recipient_name: str,
     otp: str,
 ) -> None:
-    """Send a registration OTP using Gmail SMTP."""
+    """Send the registration OTP through Gmail."""
 
     message = EmailMessage()
 
@@ -53,9 +53,9 @@ Your Smart Medicine System verification code is:
 
 {otp}
 
-This code expires in {settings.OTP_EXPIRE_MINUTES} minutes.
+This OTP expires in {settings.OTP_EXPIRE_MINUTES} minutes.
 
-If you did not create this account, you can ignore this email.
+If you did not create this account, ignore this email.
 
 Regards,
 Smart Medicine System

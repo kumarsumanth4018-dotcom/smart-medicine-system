@@ -1,186 +1,299 @@
-/**
- * Component: MedicineDetailsPage
- *
- * Description:
- *   Displays detailed information about a selected medicine,
- *   its generic alternatives, price comparison,
- *   nearby pharmacy availability and medicine information.
- *
- * Responsibilities:
- *   - Read medicine ID from URL param (:id)
- *   - Compose all medicine detail sections in specification order
- *   - Two-column layout: main content (left) + action panel (right)
- *   - Breadcrumb navigation back to search
- *
- * Section order (Module 7B Part 2 specification):
- *   1. MedicineOverviewSection     — hero card with all identity fields
- *   2. PriceComparisonSection      — brand vs generic price comparison
- *   3. GenericRecommendationSection — recommended Jan Aushadhi alternative
- *   4. NearbyPharmacyPreview        — nearest stocking pharmacy
- *   5. MedicineInfoTabs             — 7-tab information panel
- *   6. SimilarMedicinesSection      — related medicines grid
- *   7. HealthcareDisclaimer         — medical disclaimer
- *   ActionPanel                     — sticky right column (desktop)
- *
- * Route: /medicine/:id (inside ProtectedRoute → UserLayout)
- *
- * Backend readiness:
- *   - Replace PLACEHOLDER_MEDICINE with TanStack Query:
- *     const { data } = useQuery({
- *       queryKey: ['medicine', id],
- *       queryFn:  () => medicineService.getById(id),
- *     })
- *
- * Dependencies:
- *   - UserLayout (via React Router nesting — automatic)
- *   - All section components (./sections/*)
- *   - Breadcrumb (components/common)
- *   - ROUTES (constants/routes)
- */
-
+import { useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import MedicineOverviewSection      from './sections/MedicineOverviewSection'
-import PriceComparisonSection       from './sections/PriceComparisonSection'
+import { useQuery } from '@tanstack/react-query'
+import { HiOutlineArrowLeft } from 'react-icons/hi2'
+
+import MedicineOverviewSection from './sections/MedicineOverviewSection'
+import PriceComparisonSection from './sections/PriceComparisonSection'
 import GenericRecommendationSection from './sections/GenericRecommendationSection'
-import NearbyPharmacyPreview        from './sections/NearbyPharmacyPreview'
-import MedicineInfoTabs             from './sections/MedicineInfoTabs'
-import ActionPanel                  from './sections/ActionPanel'
-import SimilarMedicinesSection      from './sections/SimilarMedicinesSection'
-import HealthcareDisclaimer         from './sections/HealthcareDisclaimer'
-import { ROUTES }                   from '../../constants/routes'
-import { HiOutlineArrowLeft }       from 'react-icons/hi2'
+import NearbyPharmacyPreview from './sections/NearbyPharmacyPreview'
+import MedicineInfoTabs from './sections/MedicineInfoTabs'
+import ActionPanel from './sections/ActionPanel'
+import SimilarMedicinesSection from './sections/SimilarMedicinesSection'
+import HealthcareDisclaimer from './sections/HealthcareDisclaimer'
 
-// =====================================================
-// Placeholder medicine data
-// TODO: Replace with useQuery(() => medicineService.getById(id))
-// =====================================================
-const PLACEHOLDER_MEDICINE = {
-  id:             'paracetamol-500',
-  name:           'Paracetamol 500mg',
-  genericName:    'Acetaminophen IP',
-  composition:    'Paracetamol IP 500mg',
-  strength:       '500mg',
-  type:           'Tablet',
-  category:       'Analgesic / Antipyretic',
-  manufacturer:   'Jan Aushadhi (BPPI)',
-  prescriptionReqd: false,
-  availability:   'available',
-  isJanAushadhi:  true,
-  isGeneric:      true,
-  isAffordable:   true,
-  nearbyPharmacyCount: 5,
-  price:          18,
-  mrp:            120,
-  description:    'Paracetamol is a widely used analgesic and antipyretic for relief of mild to moderate pain and fever reduction.',
-  lastUpdated:    'July 2025',
+import medicineService from '../../services/medicineService'
+import { ROUTES } from '../../constants/routes'
+
+
+function extractStrength(value = '') {
+  const result = value.match(
+    /\d+(\.\d+)?\s?(mg|g|ml|mcg|iu)/i,
+  )
+
+  return result ? result[0] : ''
 }
 
-const PLACEHOLDER_PRICES = {
-  brandName:    'Crocin 500 (Branded)',
-  brandPrice:   120,
-  genericName:  'Paracetamol IP 500mg (Jan Aushadhi)',
-  genericPrice: 18,
-}
 
-const PLACEHOLDER_GENERIC = {
-  id:               'gen-paracetamol-500',
-  name:             'Paracetamol IP 500mg',
-  equivalentName:   'Acetaminophen (Generic)',
-  composition:      'Paracetamol IP 500mg',
-  price:            18,
-  brandPrice:       120,
-  manufacturer:     'Jan Aushadhi (BPPI)',
-  isCompositionMatch: true,
-  isQualityAssured:   true,
-}
-
-// =====================================================
-// Medicine Details Page
-// =====================================================
 function MedicineDetailsPage() {
   const { id } = useParams()
 
-  // TODO: fetch real medicine data
-  // const { data: medicine, isLoading, isError } = useQuery({
-  //   queryKey: ['medicine', id],
-  //   queryFn:  () => medicineService.getById(id),
-  // })
-  const medicine = PLACEHOLDER_MEDICINE
+  const {
+    data: medicineResponse,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['medicine', id],
+
+    queryFn: async () => {
+      const { data } = await medicineService.getById(id)
+      return data
+    },
+
+    enabled: Boolean(id),
+  })
+
+  const medicine = useMemo(() => {
+    if (!medicineResponse) {
+      return null
+    }
+
+    return {
+      id: medicineResponse.id,
+      pmbiCode: medicineResponse.pmbi_code,
+
+      name:
+        medicineResponse.brand_name ||
+        medicineResponse.generic_name,
+
+      genericName: medicineResponse.generic_name,
+
+      composition: medicineResponse.composition,
+
+      strength: extractStrength(
+        medicineResponse.composition ||
+        medicineResponse.generic_name,
+      ),
+
+      type: medicineResponse.pack_size || 'Medicine',
+
+      category:
+        medicineResponse.category ||
+        'General Medicine',
+
+      manufacturer:
+        medicineResponse.manufacturer ||
+        'Manufacturer not available',
+
+      prescriptionReqd: false,
+
+      availability: 'available',
+
+      isJanAushadhi: true,
+      isGeneric: true,
+
+      isAffordable:
+        Number(medicineResponse.saving_pct) >= 50,
+
+      nearbyPharmacyCount: 0,
+
+      price:
+        Number(medicineResponse.jan_aushadhi_mrp) || 0,
+
+      mrp:
+        Number(medicineResponse.branded_avg_mrp) || 0,
+
+      savingsPercentage:
+        Number(medicineResponse.saving_pct) || 0,
+
+      description:
+        `${medicineResponse.generic_name} is available through the ` +
+        `Jan Aushadhi medicine programme.`,
+
+      lastUpdated: 'Recently',
+    }
+  }, [medicineResponse])
+
+  const prices = useMemo(() => {
+    if (!medicineResponse) {
+      return null
+    }
+
+    return {
+      brandName:
+        `${medicineResponse.brand_name} (Branded)`,
+
+      brandPrice:
+        Number(medicineResponse.branded_avg_mrp) || 0,
+
+      genericName:
+        `${medicineResponse.generic_name} (Jan Aushadhi)`,
+
+      genericPrice:
+        Number(medicineResponse.jan_aushadhi_mrp) || 0,
+    }
+  }, [medicineResponse])
+
+  const genericMedicine = useMemo(() => {
+    if (!medicineResponse) {
+      return null
+    }
+
+    return {
+      id: medicineResponse.id,
+
+      name: medicineResponse.generic_name,
+
+      equivalentName:
+        `${medicineResponse.generic_name} (Generic)`,
+
+      composition: medicineResponse.composition,
+
+      price:
+        Number(medicineResponse.jan_aushadhi_mrp) || 0,
+
+      brandPrice:
+        Number(medicineResponse.branded_avg_mrp) || 0,
+
+      manufacturer:
+        medicineResponse.manufacturer ||
+        'Jan Aushadhi',
+
+      isCompositionMatch: true,
+      isQualityAssured: true,
+    }
+  }, [medicineResponse])
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="text-center">
+          <div
+            className="mx-auto h-10 w-10 animate-spin rounded-full
+                       border-4 border-primary-200
+                       border-t-primary-600"
+          />
+
+          <p className="mt-4 text-sm text-slate-500">
+            Loading medicine information...
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (isError) {
+    const errorMessage =
+      error?.response?.data?.detail ||
+      'Unable to load medicine information.'
+
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div
+          className="w-full max-w-md rounded-2xl border
+                     border-red-200 bg-red-50 p-6 text-center"
+        >
+          <h2 className="text-lg font-bold text-red-700">
+            Medicine could not be loaded
+          </h2>
+
+          <p className="mt-2 text-sm text-red-600">
+            {errorMessage}
+          </p>
+
+          <div className="mt-5 flex justify-center gap-3">
+            <Link
+              to={ROUTES.USER.SEARCH}
+              className="inline-flex items-center gap-2 rounded-lg
+                         border border-slate-300 bg-white px-4 py-2
+                         text-sm font-medium text-slate-700"
+            >
+              <HiOutlineArrowLeft />
+              Back to Search
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="rounded-lg bg-primary-600 px-4 py-2
+                         text-sm font-medium text-white
+                         hover:bg-primary-700"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!medicine || !prices || !genericMedicine) {
+    return null
+  }
 
   return (
-    <article aria-label={`Medicine details: ${medicine.name}`}>
-
-      {/* =====================================================
-          Breadcrumb navigation
-         ===================================================== */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-4 text-xs text-slate-400">
+    <article
+      aria-label={`Medicine details: ${medicine.name}`}
+    >
+      {/* Breadcrumb */}
+      <nav
+        aria-label="Breadcrumb"
+        className="mb-4 flex items-center gap-2
+                   text-xs text-slate-400"
+      >
         <Link
           to={ROUTES.USER.SEARCH}
-          className="hover:text-primary-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded"
+          className="hover:text-primary-600"
         >
           Search
         </Link>
+
         <span aria-hidden="true">/</span>
+
         <Link
-          to={`${ROUTES.USER.SEARCH_RESULTS}?q=${medicine.name}`}
-          className="hover:text-primary-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded"
+          to={
+            `${ROUTES.USER.SEARCH_RESULTS}?q=` +
+            encodeURIComponent(medicine.genericName)
+          }
+          className="hover:text-primary-600"
         >
           Results
         </Link>
+
         <span aria-hidden="true">/</span>
-        <span className="text-slate-600 font-medium truncate">{medicine.name}</span>
+
+        <span className="truncate font-medium text-slate-600">
+          {medicine.name}
+        </span>
       </nav>
 
-      {/* =====================================================
-          Two-column layout: main content + action panel
-         ===================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-6">
+      <div
+        className="grid grid-cols-1 gap-6
+                   lg:grid-cols-[1fr_260px]"
+      >
+        {/* Main content */}
+        <div className="flex min-w-0 flex-col gap-6">
+          <MedicineOverviewSection
+            medicine={medicine}
+          />
 
-        {/* ── Main content column ──────────────────────────── */}
-        <div className="flex flex-col gap-6 min-w-0">
+          <PriceComparisonSection
+            prices={prices}
+          />
 
-          {/* =====================================================
-              Medicine Overview
-             ===================================================== */}
-          <MedicineOverviewSection medicine={medicine} />
+          <GenericRecommendationSection
+            generic={genericMedicine}
+          />
 
-          {/* =====================================================
-              Price Comparison
-             ===================================================== */}
-          <PriceComparisonSection prices={PLACEHOLDER_PRICES} />
+          {/* Nearby pharmacy data will be connected next */}
+          <NearbyPharmacyPreview
+          pmbiCode={medicine.pmbiCode}
+        />
 
-          {/* =====================================================
-              Generic Recommendation
-             ===================================================== */}
-          <GenericRecommendationSection generic={PLACEHOLDER_GENERIC} />
-
-          {/* =====================================================
-              Nearby Pharmacy Preview
-             ===================================================== */}
-          <NearbyPharmacyPreview />
-
-          {/* =====================================================
-              Medicine Information Tabs
-             ===================================================== */}
           <MedicineInfoTabs />
 
-          {/* =====================================================
-              Similar Medicines
-             ===================================================== */}
           <SimilarMedicinesSection />
 
-          {/* =====================================================
-              Healthcare Disclaimer
-             ===================================================== */}
           <HealthcareDisclaimer />
         </div>
 
-        {/* ── Action panel column (sticky on desktop) ──────── */}
+        {/* Action panel */}
         <div className="lg:sticky lg:top-16 lg:self-start">
           <ActionPanel medicine={medicine} />
         </div>
       </div>
-
     </article>
   )
 }

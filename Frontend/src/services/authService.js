@@ -26,9 +26,13 @@ const authService = {
 
   getMe: () => axiosClient.get('/auth/me'),
 
-  verifyOtp: (data) => axiosClient.post('/auth/verify-otp', data),
+  // Backend takes `flow` as a query param and {email, otp} as the body
+  verifyOtp: ({ email, otp, flow = 'register' }) =>
+    axiosClient.post(`/auth/verify-otp?flow=${encodeURIComponent(flow)}`, { email, otp }),
 
-  resendOtp: (data) => axiosClient.post('/auth/resend-otp', data),
+  // Backend takes email as a query param, no body
+  resendOtp: ({ email }) =>
+    axiosClient.post(`/auth/resend-otp?email=${encodeURIComponent(email)}`),
 
   forgotPassword: (data) => axiosClient.post('/auth/forgot-password', data),
 

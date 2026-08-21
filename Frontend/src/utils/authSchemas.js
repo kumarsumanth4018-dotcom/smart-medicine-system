@@ -33,10 +33,13 @@ const mobileField = z
 
 const nameField = z
   .string()
-  .min(2,  'Full name must be at least 2 characters.')
+  .trim()
+  .min(3, 'Full name must be at least 3 characters.')
   .max(60, 'Full name must not exceed 60 characters.')
-  .regex(/^[a-zA-Z\s]+$/, 'Full name can only contain letters and spaces.')
-
+  .regex(
+    /^[a-zA-Z\s]+$/,
+    'Full name can only contain letters and spaces.',
+  )
 // ── Login schema ───────────────────────────────────────────────────────────
 export const loginSchema = z.object({
   email:      emailField,

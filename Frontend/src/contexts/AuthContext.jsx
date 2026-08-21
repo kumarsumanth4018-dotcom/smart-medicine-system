@@ -151,55 +151,82 @@ export function AuthProvider({ children }) {
    * Returns the email so the OTP page can display it.
    */
   const register = useCallback(async (payload) => {
-    setIsLoading(true)
-    setAuthError(null)
-    try {
-      // TODO: replace mock with → await authService.register(payload)
-      return { email: payload.email }
-    } catch (err) {
-      const msg = err?.response?.data?.message ?? 'Registration failed. Please try again.'
-      setAuthError(msg)
-      throw err
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  setIsLoading(true)
+  setAuthError(null)
 
+  try {
+    const { data } = await authService.register({
+      full_name: payload.fullName.trim(),
+      email: payload.email.trim().toLowerCase(),
+      phone_number: payload.mobile.trim(),
+      password: payload.password,
+    })
+
+    return {
+      email: data.email || payload.email.trim().toLowerCase(),
+      message: data.message,
+    }
+  } catch (err) {
+    const message =
+      err?.response?.data?.detail ||
+      'Registration failed. Please try again.'
+
+    setAuthError(message)
+    throw err
+  } finally {
+    setIsLoading(false)
+  }
+}, [])
   /**
    * Verify OTP — validates the 6-digit code.
    */
   const verifyOtp = useCallback(async (payload) => {
-    setIsLoading(true)
-    setAuthError(null)
-    try {
-      // TODO: replace mock with → await authService.verifyOtp(payload)
-      return true
-    } catch (err) {
-      const msg = err?.response?.data?.message ?? 'Invalid or expired OTP.'
-      setAuthError(msg)
-      throw err
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  setIsLoading(true)
+  setAuthError(null)
+
+  try {
+    const { data } = await authService.verifyOtp({
+      email: payload.email.trim().toLowerCase(),
+      otp: payload.otp,
+    })
+
+    return data
+  } catch (err) {
+    const message =
+      err?.response?.data?.detail ||
+      'OTP verification failed. Please try again.'
+
+    setAuthError(message)
+    throw err
+  } finally {
+    setIsLoading(false)
+  }
+}, [])
 
   /**
    * Resend OTP
    */
   const resendOtp = useCallback(async (payload) => {
-    setIsLoading(true)
-    setAuthError(null)
-    try {
-      // TODO: replace mock with → await authService.resendOtp(payload)
-      return true
-    } catch (err) {
-      const msg = err?.response?.data?.message ?? 'Failed to resend OTP.'
-      setAuthError(msg)
-      throw err
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  setIsLoading(true)
+  setAuthError(null)
+
+  try {
+    const { data } = await authService.resendOtp({
+      email: payload.email.trim().toLowerCase(),
+    })
+
+    return data
+  } catch (err) {
+    const message =
+      err?.response?.data?.detail ||
+      'Failed to resend OTP. Please try again.'
+
+    setAuthError(message)
+    throw err
+  } finally {
+    setIsLoading(false)
+  }
+}, [])
 
   /**
    * Forgot Password — sends OTP to the provided email.
@@ -208,10 +235,10 @@ export function AuthProvider({ children }) {
     setIsLoading(true)
     setAuthError(null)
     try {
-      // TODO: replace mock with → await authService.forgotPassword(payload)
+      await authService.forgotPassword(payload)
       return { email: payload.email }
     } catch (err) {
-      const msg = err?.response?.data?.message ?? 'Failed to send reset OTP.'
+      const msg = err?.response?.data?.detail ?? 'Failed to send reset OTP.'
       setAuthError(msg)
       throw err
     } finally {
@@ -226,10 +253,14 @@ export function AuthProvider({ children }) {
     setIsLoading(true)
     setAuthError(null)
     try {
-      // TODO: replace mock with → await authService.resetPassword(payload)
+      await authService.resetPassword({
+        email: payload.email,
+        otp: payload.otp,
+        new_password: payload.password,
+      })
       return true
     } catch (err) {
-      const msg = err?.response?.data?.message ?? 'Failed to reset password.'
+      const msg = err?.response?.data?.detail ?? 'Failed to reset password.'
       setAuthError(msg)
       throw err
     } finally {
