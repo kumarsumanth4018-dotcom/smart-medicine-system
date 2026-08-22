@@ -32,7 +32,7 @@ const authService = {
 
   // Backend takes email as a query param, no body
   resendOtp: ({ email }) =>
-    axiosClient.post(`/auth/resend-otp?email=${encodeURIComponent(email)}`),
+  axiosClient.post('/auth/resend-otp', { email }),
 
   forgotPassword: (data) => axiosClient.post('/auth/forgot-password', data),
 

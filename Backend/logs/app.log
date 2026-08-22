@@ -215,3 +215,11 @@
 2026-08-18 22:34:19,385 | INFO | MongoDB connected successfully.
 2026-08-18 22:34:24,842 | INFO | MongoDB connection closed.
 2026-08-18 22:35:23,661 | INFO | MongoDB connected successfully.
+2026-08-21 20:28:23,695 | INFO | MongoDB connected successfully.
+2026-08-21 20:29:27,840 | INFO | User logged in successfully: pharmacy@test.com
+2026-08-21 20:32:27,314 | INFO | Restocked JA266 at kendra 6a83e4f951a519dc2b591b46: +10
+2026-08-21 20:40:23,695 | INFO | MongoDB connection closed.
+2026-08-22 12:21:54,552 | INFO | MongoDB connected successfully.
+2026-08-22 12:24:45,677 | INFO | MongoDB connection closed.
+2026-08-22 12:28:30,278 | INFO | MongoDB connected successfully.
+2026-08-22 12:52:53,299 | INFO | MongoDB connection closed.
