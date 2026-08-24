@@ -92,6 +92,9 @@ const HomePage = lazy(() => import('../pages/home/HomePage'))
 // =====================================================
 const UserDashboard           = lazy(() => import('../pages/dashboard/UserDashboard'))
 const MedicineSearchPage      = lazy(() => import('../pages/search/MedicineSearchPage'))
+const PrescriptionUploadPage = lazy(
+  () => import('../pages/prescription/PrescriptionUploadPage'),
+)
 const SearchResultsPage       = lazy(() => import('../pages/results/SearchResultsPage'))
 const MedicineDetailsPage     = lazy(() => import('../pages/medicine/MedicineDetailsPage'))
 const GenericRecommendationPage = lazy(() => import('../pages/generic/GenericRecommendationPage'))
@@ -164,6 +167,10 @@ function AppRouter() {
             {/* Medicine Search flow */}
             <Route path="search"                  element={<MedicineSearchPage />} />
             <Route path="search/results"          element={<SearchResultsPage />} />
+            <Route
+  path="prescription-search"
+  element={<PrescriptionUploadPage />}
+/>
             <Route path="medicine/:id"            element={<MedicineDetailsPage />} />
             <Route path="medicine/:id/generic"    element={<GenericRecommendationPage />} />
             {/* Pharmacy Map flow */}

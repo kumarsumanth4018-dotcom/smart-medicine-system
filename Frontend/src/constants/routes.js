@@ -28,6 +28,7 @@ export const ROUTES = {
     DASHBOARD: '/dashboard',
     SEARCH: '/search',
     SEARCH_RESULTS: '/search/results',
+    PRESCRIPTION_SEARCH: '/prescription-search',
     MEDICINE_DETAIL: '/medicine/:id',
     GENERIC_RECOMMENDATION: '/medicine/:id/generic',
     NEARBY_PHARMACIES: '/pharmacies/nearby',

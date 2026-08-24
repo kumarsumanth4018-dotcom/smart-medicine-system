@@ -73,11 +73,37 @@ async def search_medicines(
     if query:
         safe_query = re.escape(query.strip())
         mongo_filter["$or"] = [
-            {"brand_name": {"$regex": safe_query, "$options": "i"}},
-            {"generic_name": {"$regex": safe_query, "$options": "i"}},
-            {"composition": {"$regex": safe_query, "$options": "i"}},
-            {"pmbi_code": {"$regex": safe_query, "$options": "i"}},
-        ]
+    {
+        "brand_name": {
+            "$regex": safe_query,
+            "$options": "i",
+        }
+    },
+    {
+        "aliases": {
+            "$regex": safe_query,
+            "$options": "i",
+        }
+    },
+    {
+        "generic_name": {
+            "$regex": safe_query,
+            "$options": "i",
+        }
+    },
+    {
+        "composition": {
+            "$regex": safe_query,
+            "$options": "i",
+        }
+    },
+    {
+        "pmbi_code": {
+            "$regex": safe_query,
+            "$options": "i",
+        }
+    },
+]
 
     if category:
         mongo_filter["category"] = category

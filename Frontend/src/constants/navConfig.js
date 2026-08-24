@@ -36,8 +36,24 @@ import { ROUTES } from './routes'
 export const USER_NAV = [
   { type: 'item', label: 'Dashboard',         to: ROUTES.USER.DASHBOARD,         icon: MdDashboard },
   { type: 'group', label: 'Medicines' },
-  { type: 'item', label: 'Search Medicines',  to: ROUTES.USER.SEARCH,            icon: HiOutlineMagnifyingGlass },
-  { type: 'item', label: 'Nearby Pharmacies', to: ROUTES.USER.NEARBY_PHARMACIES, icon: HiOutlineMapPin },
+  {
+  type: 'item',
+  label: 'Search Medicines',
+  to: ROUTES.USER.SEARCH,
+  icon: HiOutlineMagnifyingGlass,
+},
+{
+  type: 'item',
+  label: 'Prescription Search',
+  to: ROUTES.USER.PRESCRIPTION_SEARCH,
+  icon: HiOutlineClipboardDocument,
+},
+{
+  type: 'item',
+  label: 'Nearby Pharmacies',
+  to: ROUTES.USER.NEARBY_PHARMACIES,
+  icon: HiOutlineMapPin,
+},
   { type: 'group', label: 'Account' },
   { type: 'item', label: 'Notifications',     to: ROUTES.USER.NOTIFICATIONS,     icon: HiOutlineBell },
   { type: 'item', label: 'My Profile',        to: ROUTES.USER.PROFILE,           icon: HiOutlineUser },
