@@ -12,7 +12,7 @@ from rapidfuzz import fuzz
 
 BACKEND_API_URL = os.getenv(
     "BACKEND_API_URL",
-    "http://127.0.0.1:8000/api/v1",
+    "http://127.0.0.1:8002/api/v1",
 )
 
 MINIMUM_MATCH_SCORE = 82
