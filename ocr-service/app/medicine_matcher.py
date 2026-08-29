@@ -16,7 +16,7 @@ BACKEND_API_URL = os.getenv(
 )
 
 MINIMUM_MATCH_SCORE = 82
-MAX_CATALOG_PAGES = 20
+MAX_CATALOG_PAGES = 30
 PAGE_SIZE = 100
 
 
@@ -56,8 +56,13 @@ IGNORED_PHRASES = {
     "doctor",
     "signature",
     "medical facility",
+    "medical practice",
+    "medical centre",
+    "medical center",
+    "hospital",
     "full name",
     "address",
+    "street",
     "phone number",
     "date",
     "expiry",
@@ -81,6 +86,14 @@ IGNORED_PHRASES = {
     "twice daily",
     "once daily",
     "three times daily",
+    "tid",
+    "bid",
+    "qid",
+    "prn",
+    "capsule daily",
+    "tablet daily",
+    "days",
+    "cap po",
 }
 
 
@@ -118,8 +131,6 @@ def normalize_medicine_name(value: str) -> str:
 
     value = value.lower().strip()
 
-    # Remove dosage values such as:
-    # 500mg, 5 ml, 100mcg, 2g, 10%, 20 units.
     value = re.sub(
         r"\b\d+(?:\.\d+)?\s*"
         r"(?:mg|mcg|g|ml|iu|units?|%)\b",
@@ -127,14 +138,44 @@ def normalize_medicine_name(value: str) -> str:
         value,
     )
 
-    # Remove remaining numbers.
     value = re.sub(r"\d+", " ", value)
-
-    # Retain alphabetic characters and spaces.
     value = re.sub(r"[^a-z\s]", " ", value)
     value = re.sub(r"\s+", " ", value)
 
     return value.strip()
+
+
+def extract_strengths(value: str) -> set[str]:
+    """
+    Extract normalized medicine strengths.
+
+    Examples:
+        Amoxicillin 500mg -> {"500mg"}
+        Paracetamol 650 mg -> {"650mg"}
+        Vitamin D3 60,000 IU -> {"60000iu"}
+    """
+
+    normalized = value.lower().replace(",", "")
+
+    matches = re.findall(
+        r"\b(\d+(?:\.\d+)?)\s*"
+        r"(mcg|mg|g|ml|iu|units?|%)\b",
+        normalized,
+    )
+
+    strengths: set[str] = set()
+
+    for amount, unit in matches:
+        normalized_unit = unit.lower()
+
+        if normalized_unit in {"unit", "units"}:
+            normalized_unit = "iu"
+
+        strengths.add(
+            f"{amount}{normalized_unit}"
+        )
+
+    return strengths
 
 
 # =====================================================
@@ -143,7 +184,7 @@ def normalize_medicine_name(value: str) -> str:
 
 def should_check_line(value: str) -> bool:
     """
-    Decide whether an OCR line can be checked
+    Decide whether an OCR line should be compared
     against the medicine catalogue.
     """
 
@@ -173,7 +214,7 @@ def should_check_line(value: str) -> bool:
 def should_show_as_unmatched(value: str) -> bool:
     """
     Decide whether an unmatched OCR line should be shown
-    for manual customer or pharmacist review.
+    for manual review.
     """
 
     if not should_check_line(value):
@@ -188,12 +229,9 @@ def should_show_as_unmatched(value: str) -> bool:
     medicine_text = normalize_medicine_name(value)
     compact_text = medicine_text.replace(" ", "")
 
-    # Ignore short fragments such as:
-    # me, ml, gm, dd and rx.
     if len(compact_text) < 4:
         return False
 
-    # Require at least one word containing four letters.
     if not re.search(r"[a-zA-Z]{4,}", medicine_text):
         return False
 
@@ -201,7 +239,7 @@ def should_show_as_unmatched(value: str) -> bool:
 
 
 # =====================================================
-# Prescription medication region
+# Prescription medicine region
 # =====================================================
 
 def get_medication_region(
@@ -210,21 +248,12 @@ def get_medication_region(
     """
     Extract the likely medication section.
 
-    Starting markers:
-        Rx
-        R
-        Inscription
+    Supports medicine appearing on the same line as Rx:
 
-    Ending markers:
-        Subscription
-        Signa
-        Doctor Signature
-
-    If no markers are detected, all OCR lines are returned.
+        Rx: Amoxicillin 500mg caps
     """
 
     medication_lines: list[dict[str, Any]] = []
-
     inside_section = False
     marker_found = False
 
@@ -235,21 +264,48 @@ def get_medication_region(
 
         normalized = normalize_text(original_text)
 
-        start_marker = (
-            normalized in {
-                "rx",
-                "r",
-                "r x",
-                "inscription",
-            }
-            or normalized.startswith("rx ")
+        # Match only Rx or R as a complete word.
+        # This prevents "Riverside" from being treated as Rx.
+        rx_match = re.match(
+            r"^\s*(?:rx|r)\b\s*[:.\-]?\s*(.+)$",
+            original_text,
+            flags=re.IGNORECASE,
         )
+
+        if rx_match:
+            medicine_after_rx = rx_match.group(1).strip()
+
+            inside_section = True
+            marker_found = True
+
+            if medicine_after_rx:
+                medication_lines.append(
+                    {
+                        **ocr_item,
+                        "text": medicine_after_rx,
+                    }
+                )
+
+            continue
+
+        start_marker = normalized in {
+            "rx",
+            "r",
+            "r x",
+            "inscription",
+        }
 
         end_marker = (
             normalized == "subscription"
             or normalized == "signa"
             or "doctor signature" in normalized
             or normalized == "signature"
+            or normalized.startswith("dr ")
+            or normalized.startswith("doctor ")
+            or "medical practice" in normalized
+            or "medical centre" in normalized
+            or "medical center" in normalized
+            or "hospital address" in normalized
         )
 
         if start_marker:
@@ -263,6 +319,7 @@ def get_medication_region(
         if inside_section:
             medication_lines.append(ocr_item)
 
+    # Some prescriptions may not contain an Rx marker.
     if not marker_found:
         return ocr_lines
 
@@ -275,14 +332,14 @@ def get_medication_region(
 
 async def load_medicine_catalog() -> list[dict[str, Any]]:
     """
-    Load medicines from the main FastAPI backend.
+    Load the complete medicine catalogue from the backend.
     """
 
     medicines: list[dict[str, Any]] = []
     page = 1
 
     async with httpx.AsyncClient(
-        timeout=20.0,
+        timeout=30.0,
     ) as client:
         while page <= MAX_CATALOG_PAGES:
             response = await client.get(
@@ -322,7 +379,7 @@ async def load_medicine_catalog() -> list[dict[str, Any]]:
 
 
 # =====================================================
-# Medicine searchable names
+# Medicine searchable values
 # =====================================================
 
 def medicine_search_values(
@@ -331,7 +388,7 @@ def medicine_search_values(
     """
     Return medicine names used for matching.
 
-    Fields:
+    Searchable fields:
         Brand name
         Generic name
         Composition
@@ -369,15 +426,155 @@ def medicine_search_values(
 
 
 # =====================================================
-# Calculate fuzzy match score
+# Fuzzy matching
 # =====================================================
+DOSAGE_FORM_WORDS = {
+    "tablet",
+    "tablets",
+    "tab",
+    "capsule",
+    "capsules",
+    "caps",
+    "cap",
+    "injection",
+    "syrup",
+    "suspension",
+    "cream",
+    "ointment",
+    "gel",
+    "drops",
+    "solution",
+    "powder",
+    "ip",
+    "bp",
+    "usp",
+    "prn",
+    "tid",
+    "bid",
+    "qid",
+    "po",
+}
+
+
+def extract_ingredient_name(value: str) -> str:
+    """
+    Extract the medicine ingredient name without strength,
+    dosage form or prescription instructions.
+    """
+
+    normalized = normalize_medicine_name(value)
+
+    remaining_words = [
+        word
+        for word in normalized.split()
+        if word not in DOSAGE_FORM_WORDS
+    ]
+
+    return " ".join(remaining_words).strip()
+
+
+def split_composition_ingredients(
+    composition: str,
+) -> list[str]:
+    """
+    Split a medicine composition into active ingredients.
+
+    Examples:
+        Paracetamol 500mg
+            -> ["paracetamol"]
+
+        Paracetamol 500mg and Caffeine 25mg
+            -> ["paracetamol", "caffeine"]
+    """
+
+    if not composition:
+        return []
+
+    parts = re.split(
+        r"\s*(?:\+|&|/|\band\b|\bwith\b)\s*",
+        composition,
+        flags=re.IGNORECASE,
+    )
+
+    ingredients: list[str] = []
+
+    for part in parts:
+        ingredient = extract_ingredient_name(part)
+
+        if ingredient and ingredient not in ingredients:
+            ingredients.append(ingredient)
+
+    return ingredients
+
+
+def composition_matches_ocr(
+    ocr_line: str,
+    medicine: dict[str, Any],
+) -> bool:
+    """
+    Ensure every active ingredient in the catalogue medicine
+    is also present in the OCR line.
+
+    This prevents:
+        Amoxicillin -> Ampicillin
+        Paracetamol -> Paracetamol + Caffeine
+    """
+
+    ocr_name = extract_ingredient_name(ocr_line)
+
+    if not ocr_name:
+        return False
+
+    composition = str(
+        medicine.get("composition", "")
+    ).strip()
+
+    if not composition:
+        composition = str(
+            medicine.get("generic_name", "")
+        ).strip()
+
+    ingredients = split_composition_ingredients(
+        composition
+    )
+
+    if not ingredients:
+        return True
+
+    for ingredient in ingredients:
+        ingredient_score = fuzz.ratio(
+            ocr_name,
+            ingredient,
+        )
+
+        partial_score = fuzz.partial_ratio(
+            ingredient,
+            ocr_name,
+        )
+
+        best_score = max(
+            ingredient_score,
+            partial_score,
+        )
+
+        # Allows small OCR/spelling differences such as:
+        # Amoxicillin <-> Amoxycillin
+        if best_score < 88:
+            return False
+
+    return True
+
 
 def calculate_match_score(
     ocr_line: str,
     medicine: dict[str, Any],
 ) -> float:
     """
-    Safely compare an OCR line with one medicine.
+    Compare OCR text with a catalogue medicine.
+
+    Medicine name and strength are evaluated separately.
+    A correct strength receives a bonus.
+    An incorrect strength receives a strong penalty.
     """
 
     normalized_line = normalize_medicine_name(
@@ -397,17 +594,6 @@ def calculate_match_score(
     line_words = normalized_line.split()
     line_compact = normalized_line.replace(" ", "")
 
-    # Short OCR fragments cannot use fuzzy matching.
-    if len(line_compact) < 4:
-        for medicine_name in searchable_values:
-            if normalized_line == medicine_name:
-                return 100.0
-
-            if normalized_line in medicine_name.split():
-                return 100.0
-
-        return 0.0
-
     scores: list[float] = []
 
     for medicine_name in searchable_values:
@@ -419,15 +605,14 @@ def calculate_match_score(
         if not medicine_compact:
             continue
 
-        # Short medicine names such as ORS must occur
-        # as complete words.
+        # Handle short medicine names such as ORS.
         if len(medicine_compact) < 5:
             if medicine_name in line_words:
                 scores.append(100.0)
 
             continue
 
-        # Exact phrase match.
+        # Exact medicine-name phrase.
         if medicine_name in normalized_line:
             scores.append(100.0)
             continue
@@ -455,8 +640,6 @@ def calculate_match_score(
             else 0
         )
 
-        # Prevent very short fragments from matching
-        # part of a much longer medicine name.
         if length_ratio >= 0.60:
             partial_score = fuzz.partial_ratio(
                 medicine_name,
@@ -468,7 +651,36 @@ def calculate_match_score(
     if not scores:
         return 0.0
 
-    return round(max(scores), 2)
+    final_score = max(scores)
+
+    ocr_strengths = extract_strengths(ocr_line)
+
+    medicine_strengths: set[str] = set()
+
+    for field_name in (
+        "brand_name",
+        "generic_name",
+        "composition",
+    ):
+        field_value = medicine.get(field_name)
+
+        if field_value:
+            medicine_strengths.update(
+                extract_strengths(str(field_value))
+            )
+
+    if ocr_strengths and medicine_strengths:
+        if ocr_strengths.intersection(
+            medicine_strengths
+        ):
+            final_score += 5
+        else:
+            final_score -= 35
+
+    return round(
+        max(0.0, min(100.0, final_score)),
+        2,
+    )
 
 
 # =====================================================
@@ -481,7 +693,7 @@ def find_matches(
 ) -> list[dict[str, Any]]:
     """
     Return up to three medicine candidates
-    for each relevant OCR line.
+    for every relevant OCR line.
     """
 
     matched_lines: list[dict[str, Any]] = []
@@ -497,6 +709,13 @@ def find_matches(
         candidates: list[dict[str, Any]] = []
 
         for medicine in medicines:
+            # Reject medicines with different or additional active ingredients.
+            if not composition_matches_ocr(
+                original_text,
+                medicine,
+            ):
+                continue
+
             score = calculate_match_score(
                 original_text,
                 medicine,
@@ -538,15 +757,19 @@ def find_matches(
             reverse=True,
         )
 
-        unique_candidates = []
-        seen_medicines = set()
+        unique_candidates: list[dict[str, Any]] = []
+        seen_medicines: set[str] = set()
 
         for candidate in candidates:
-            identifier = (
+            identifier = str(
                 candidate.get("medicine_id")
                 or candidate.get("pmbi_code")
                 or candidate.get("generic_name")
+                or ""
             )
+
+            if not identifier:
+                continue
 
             if identifier in seen_medicines:
                 continue
@@ -582,7 +805,7 @@ async def match_ocr_medicines(
 ) -> dict[str, Any]:
     """
     Match OCR lines against catalogue medicines and
-    return unmatched medication text for manual review.
+    return unmatched medicine-like text for review.
     """
 
     try:
@@ -604,7 +827,7 @@ async def match_ocr_medicines(
             for match in matches
         }
 
-        unmatched_lines = []
+        unmatched_lines: list[dict[str, Any]] = []
 
         for ocr_item in medication_region:
             original_text = str(
@@ -645,9 +868,9 @@ async def match_ocr_medicines(
             ),
             "unmatched_lines": unmatched_lines,
             "warning": (
-                "Candidates are suggestions only. "
-                "The customer or pharmacist must "
-                "confirm them."
+                "OCR candidates are suggestions only. "
+                "The customer, doctor or pharmacist "
+                "must confirm every medicine."
             ),
         }
 
