@@ -4,6 +4,7 @@ from typing import Any
 from PIL import Image
 
 from app.handwriting_engine import (
+    HANDWRITING_MODEL_NAME,
     recognize_handwritten_line,
 )
 
@@ -12,9 +13,16 @@ from app.handwriting_engine import (
 # This prevents very slow processing on CPU.
 MAX_FALLBACK_LINES = 6
 
-# Additional pixels placed around each PaddleOCR box.
-CROP_PADDING_X = 25
-CROP_PADDING_Y = 15
+# Padding around each PaddleOCR box is proportional to the box's own
+# size rather than a fixed pixel amount. A fixed padding either clips
+# tall ascenders/descenders (g, y, h, l — common in medicine names) on
+# small crops, or wastes context on large ones. These are minimums;
+# actual padding scales with box height/width up to a sensible cap.
+CROP_PADDING_X_RATIO = 0.15
+CROP_PADDING_Y_RATIO = 0.35
+MIN_CROP_PADDING_X = 12
+MIN_CROP_PADDING_Y = 10
+MAX_CROP_PADDING_Y = 40
 
 
 def normalize_text(value: str) -> str:
@@ -49,24 +57,39 @@ def expand_box(
     except (TypeError, ValueError):
         return None
 
+    box_width = right - left
+    box_height = bottom - top
+
+    padding_x = max(
+        MIN_CROP_PADDING_X,
+        round(box_width * CROP_PADDING_X_RATIO),
+    )
+    padding_y = min(
+        MAX_CROP_PADDING_Y,
+        max(
+            MIN_CROP_PADDING_Y,
+            round(box_height * CROP_PADDING_Y_RATIO),
+        ),
+    )
+
     left = max(
         0,
-        left - CROP_PADDING_X,
+        left - padding_x,
     )
 
     top = max(
         0,
-        top - CROP_PADDING_Y,
+        top - padding_y,
     )
 
     right = min(
         image_width,
-        right + CROP_PADDING_X,
+        right + padding_x,
     )
 
     bottom = min(
         image_height,
-        bottom + CROP_PADDING_Y,
+        bottom + padding_y,
     )
 
     if right <= left or bottom <= top:
@@ -279,9 +302,7 @@ def run_handwriting_fallback(
     return {
         "attempted": True,
         "engine": "TrOCR",
-        "model": (
-            "microsoft/trocr-small-handwritten"
-        ),
+        "model": HANDWRITING_MODEL_NAME,
         "line_count": len(successful_lines),
         "lines": successful_lines,
         "requires_confirmation": True,
