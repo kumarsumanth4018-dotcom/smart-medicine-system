@@ -1,7 +1,9 @@
+import time
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
+from app.medicine_matcher import get_medication_region, should_check_line, strip_rx_prefix
 
 from app.handwriting_engine import (
     HANDWRITING_MODEL_NAME,
@@ -11,18 +13,18 @@ from app.handwriting_engine import (
 
 # Maximum number of lines processed by TrOCR in one request.
 # This prevents very slow processing on CPU.
-MAX_FALLBACK_LINES = 6
+MAX_FALLBACK_LINES = 3
 
 # Padding around each PaddleOCR box is proportional to the box's own
 # size rather than a fixed pixel amount. A fixed padding either clips
 # tall ascenders/descenders (g, y, h, l — common in medicine names) on
 # small crops, or wastes context on large ones. These are minimums;
 # actual padding scales with box height/width up to a sensible cap.
-CROP_PADDING_X_RATIO = 0.15
-CROP_PADDING_Y_RATIO = 0.35
+CROP_PADDING_X_RATIO = 0.03
+CROP_PADDING_Y_RATIO = 0.08
 MIN_CROP_PADDING_X = 12
-MIN_CROP_PADDING_Y = 10
-MAX_CROP_PADDING_Y = 40
+MIN_CROP_PADDING_Y = 4
+MAX_CROP_PADDING_Y = 12
 
 
 def normalize_text(value: str) -> str:
@@ -115,7 +117,7 @@ def get_unmatched_texts(
 
     for item in unmatched_lines:
         text = normalize_text(
-            item.get("ocr_text", "")
+            strip_rx_prefix(item.get("ocr_text", ""))
         )
 
         if text:
@@ -139,14 +141,17 @@ def find_fallback_candidates(
 
     candidates = []
 
-    for line in ocr_lines:
+    for line in get_medication_region(ocr_lines):
         original_text = str(
             line.get("text", "")
         ).strip()
 
         normalized = normalize_text(
-            original_text
+            strip_rx_prefix(original_text)
         )
+
+        if not should_check_line(original_text):
+            continue
 
         if normalized not in unmatched_texts:
             continue
@@ -170,10 +175,9 @@ def find_fallback_candidates(
             }
         )
 
-        if len(candidates) >= MAX_FALLBACK_LINES:
-            break
-
-    return candidates
+    # Prefer lines containing a number before isolated possible brand names.
+    candidates.sort(key=lambda item: not any(c.isdigit() for c in item["original_text"]))
+    return candidates[:MAX_FALLBACK_LINES]
 
 
 def run_handwriting_fallback(
@@ -214,6 +218,7 @@ def run_handwriting_fallback(
         }
 
     recognized_lines = []
+    fallback_started = time.perf_counter()
 
     with Image.open(file_path) as prescription_image:
         prescription_image = (
@@ -238,6 +243,8 @@ def run_handwriting_fallback(
                 crop_box
             )
 
+            line_started = time.perf_counter()
+            print(f"[OCR] TrOCR line {len(recognized_lines) + 1}/{len(fallback_candidates)}", flush=True)
             try:
                 trocr_result = (
                     recognize_handwritten_line(
@@ -255,6 +262,7 @@ def run_handwriting_fallback(
                 recognized_lines.append(
                     {
                         "text": recognized_text,
+                        "processing_seconds": round(time.perf_counter() - line_started, 3),
                         "confidence": trocr_result.get(
                             "confidence",
                             0,
@@ -303,6 +311,8 @@ def run_handwriting_fallback(
         "attempted": True,
         "engine": "TrOCR",
         "model": HANDWRITING_MODEL_NAME,
+        "processing_seconds": round(time.perf_counter() - fallback_started, 3),
+        "candidate_count": len(fallback_candidates),
         "line_count": len(successful_lines),
         "lines": successful_lines,
         "requires_confirmation": True,

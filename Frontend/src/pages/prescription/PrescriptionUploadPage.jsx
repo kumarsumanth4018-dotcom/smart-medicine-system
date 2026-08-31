@@ -161,21 +161,10 @@ function PrescriptionUploadPage() {
 
       setScanResult(response)
 
-      const detectedMatches =
-        response?.medicine_matching?.matches ?? []
-
-      const allCandidates = detectedMatches.flatMap(
-        (match) => match.candidates ?? [],
-      )
-
-      /*
-       * Automatically select the first candidate.
-       * The customer can select a different candidate
-       * before confirming.
-       */
-      if (allCandidates.length > 0) {
-        setSelectedCandidate(allCandidates[0])
+      if (response?.medicine_matching?.catalog_available === false) {
+        setError(response.medicine_matching.warning || 'Medicine catalogue unavailable. Try again after checking the backend.')
       }
+      // No automatic selection: the user must explicitly choose a candidate.
     } catch (requestError) {
       setError(
         requestError?.message ||
@@ -188,12 +177,7 @@ function PrescriptionUploadPage() {
 
 
   const handleConfirmMedicine = () => {
-    const firstDetectedCandidate =
-      scanResult?.medicine_matching?.matches?.[0]
-        ?.candidates?.[0]
-
-    const confirmedCandidate =
-      selectedCandidate || firstDetectedCandidate
+    const confirmedCandidate = selectedCandidate
 
     if (!confirmedCandidate?.medicine_id) {
       setError(
@@ -223,6 +207,7 @@ function PrescriptionUploadPage() {
 
   const noMedicineDetected =
     scanResult &&
+    matchingData?.catalog_available !== false &&
     !hasMatchedMedicines &&
     !hasUnmatchedMedicines
 
@@ -432,8 +417,8 @@ function PrescriptionUploadPage() {
 
           {isScanning && (
             <p className="mt-3 text-center text-xs text-slate-500">
-              Handwritten prescriptions may take a little
-              longer to process.
+              Processing handwriting may take time, especially while the model
+              loads for the first scan. Please avoid sending duplicate requests.
             </p>
           )}
         </section>
@@ -503,6 +488,7 @@ function PrescriptionUploadPage() {
           {/* Successfully matched medicines */}
           {scanResult && hasMatchedMedicines && (
             <div className="space-y-5">
+              <p className="text-sm text-slate-600">Select one candidate to view its details. Selection is not pharmacist confirmation.</p>
               {matches.map((match, matchIndex) => (
                 <div
                   key={`${match.ocr_text}-${matchIndex}`}
@@ -643,7 +629,7 @@ function PrescriptionUploadPage() {
               >
                 <HiOutlineCheckCircle size={21} />
 
-                Confirm and View Medicine
+                View Selected Medicine
               </button>
             </div>
           )}
@@ -666,13 +652,13 @@ function PrescriptionUploadPage() {
 
                 <div>
                   <h3 className="font-semibold text-amber-900">
-                    Recognized but unavailable in catalogue
+                    Unable to match reliably — manual review
                   </h3>
 
                   <p className="mt-1 text-sm text-amber-700">
-                    OCR recognized the following possible
-                    medicine names, but they were not found in
-                    the current medicine catalogue.
+                    These lines could not be matched reliably. The handwriting
+                    may be unclear, the strength may be unreadable, or the
+                    medicine may not be in the catalogue.
                   </p>
                 </div>
               </div>
@@ -690,6 +676,9 @@ function PrescriptionUploadPage() {
                           {item.ocr_text}
                         </p>
 
+                        <p className="mt-1 text-sm text-amber-800">
+                          {item.reason || 'Confirm the medicine name and strength with a pharmacist.'}
+                        </p>
                         <p className="mt-1 text-xs text-slate-500">
                           OCR confidence:{' '}
                           {formatConfidence(
@@ -717,6 +706,13 @@ function PrescriptionUploadPage() {
         </section>
       </div>
 
+
+      {scanResult?.timings && (
+        <div className="mt-4 rounded-xl bg-slate-50 p-4 text-xs text-slate-600">
+          <p>Processing time: {scanResult.timings.total_seconds} seconds</p>
+          <p>PaddleOCR: {scanResult.timings.paddle_ocr_seconds}s · Catalogue/matching: {scanResult.timings.catalogue_and_matching_seconds}s · Handwriting/matching: {scanResult.timings.fallback_and_matching_seconds}s</p>
+        </div>
+      )}
 
       {/* Extracted prescription text */}
       {scanResult && extractedText && (

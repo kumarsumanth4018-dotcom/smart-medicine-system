@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -340,6 +341,8 @@ async def scan_prescription(
         original_suffix = ".jpg"
 
     temporary_path = None
+    timings = {}
+    request_started = time.perf_counter()
 
     try:
         # Save the uploaded image temporarily.
@@ -354,6 +357,8 @@ async def scan_prescription(
         # Step 1: PaddleOCR
         # =================================================
 
+        stage_started = time.perf_counter()
+        print("[OCR] Reading image with PaddleOCR", flush=True)
         paddle_result = await asyncio.to_thread(
             extract_text_from_image,
             temporary_path,
@@ -363,12 +368,16 @@ async def scan_prescription(
         # Step 2: Match PaddleOCR result
         # =================================================
 
+        timings["paddle_ocr_seconds"] = round(time.perf_counter() - stage_started, 3)
+        stage_started = time.perf_counter()
+        print("[OCR] Loading catalogue and matching", flush=True)
         medicine_matching = (
             await match_ocr_medicines(
                 paddle_result["lines"]
             )
         )
 
+        timings["catalogue_and_matching_seconds"] = round(time.perf_counter() - stage_started, 3)
         handwriting_result = (
             empty_handwriting_result()
         )
@@ -393,6 +402,7 @@ async def scan_prescription(
         # Step 3: Optional TrOCR fallback
         # =================================================
 
+        stage_started = time.perf_counter()
         if unmatched_lines:
             try:
                 handwriting_result = (
@@ -457,6 +467,9 @@ async def scan_prescription(
                     ),
                 }
 
+        timings["fallback_and_matching_seconds"] = round(time.perf_counter() - stage_started, 3)
+        timings["total_seconds"] = round(time.perf_counter() - request_started, 3)
+        print(f"[OCR] Finished: {timings}", flush=True)
         fallback_used = bool(
             handwriting_result.get(
                 "attempted",
@@ -473,6 +486,7 @@ async def scan_prescription(
         return {
             "success": True,
             "filename": file.filename,
+            "timings": timings,
             "ocr_engine": ocr_engine_name,
             "requires_confirmation": True,
             "result": paddle_result,
