@@ -1,271 +1,433 @@
-/**
- * Component: NearbyPharmacyList
- *
- * Description:
- *   Scrollable list of extended pharmacy cards with all required fields
- *   and action buttons. Clicking a card selects it on the map.
- *
- * Responsibilities:
- *   - Render NearbyPharmacyCard for each pharmacy
- *   - Highlight the currently selected card
- *   - Pass onSelect, onViewDetails, onReserve callbacks
- *
- * Backend readiness:
- *   - pharmacies → GET /api/v1/pharmacies/nearby?medicine=...
- */
-
 import { useState } from 'react'
 import {
-  HiOutlineMapPin, HiOutlinePhone, HiOutlineClock,
-  HiOutlineStar, HiOutlineTruck, HiOutlineArrowRight,
-  HiOutlineCalendarDays, HiBookmark, HiOutlineBookmark,
+  HiBookmark,
+  HiOutlineBookmark,
+  HiOutlineCalendarDays,
+  HiOutlineClock,
+  HiOutlineMapPin,
+  HiOutlinePhone,
+  HiOutlineStar,
+  HiOutlineTruck,
 } from 'react-icons/hi2'
 import { MdLocalPharmacy } from 'react-icons/md'
+
 import Badge from '../../../components/ui/Badge'
 
-// =======================================================
-// Extended pharmacy data
-// TODO: Replace with GET /api/v1/pharmacies/nearby?medicine=...&lat=...&lng=...
-// =======================================================
-const NEARBY_PHARMACIES = [
-  {
-    id: 'p1',
-    name: 'Jan Aushadhi Kendra — Andheri West',
-    address: '12, Veera Desai Road, Andheri West, Mumbai 400053',
-    distance: '0.8 km',
-    travelTime: '~10 min walk',
-    phone: '+91 98765 43210',
-    hours: '8:00 AM – 9:00 PM',
-    isOpen: true,
-    isJanAushadhi: true,
-    availability: 'available',
-    rating: 4.5,
-    ratingCount: 128,
-  },
-  {
-    id: 'p2',
-    name: 'Shree Medical Store',
-    address: '5, SV Road, Near Andheri Station, Mumbai 400058',
-    distance: '1.2 km',
-    travelTime: '~15 min walk',
-    phone: '+91 98123 45678',
-    hours: '9:00 AM – 10:00 PM',
-    isOpen: true,
-    isJanAushadhi: false,
-    availability: 'limited',
-    rating: 4.2,
-    ratingCount: 87,
-  },
-  {
-    id: 'p3',
-    name: 'Jan Aushadhi Kendra — Versova',
-    address: '22, New Link Road, Versova, Andheri West, Mumbai 400061',
-    distance: '1.6 km',
-    travelTime: '~5 min auto',
-    phone: '+91 99887 65432',
-    hours: '8:00 AM – 8:00 PM',
-    isOpen: true,
-    isJanAushadhi: true,
-    availability: 'available',
-    rating: 4.7,
-    ratingCount: 214,
-  },
-  {
-    id: 'p4',
-    name: 'Apollo Pharmacy',
-    address: '101, Lokhandwala Complex, Andheri West, Mumbai 400053',
-    distance: '1.9 km',
-    travelTime: '~7 min auto',
-    phone: '+91 98001 23456',
-    hours: '24 Hours',
-    isOpen: false,
-    isJanAushadhi: false,
-    availability: 'unavailable',
-    rating: 4.0,
-    ratingCount: 302,
-  },
-]
 
-const AVAIL_CONFIG = {
-  available:   { variant: 'success', label: 'In Stock'      },
-  limited:     { variant: 'warning', label: 'Limited Stock' },
-  unavailable: { variant: 'danger',  label: 'Out of Stock'  },
+const AVAILABILITY_CONFIG = {
+  available: {
+    variant: 'success',
+    label: 'In Stock',
+  },
+  limited: {
+    variant: 'warning',
+    label: 'Limited Stock',
+  },
+  unavailable: {
+    variant: 'danger',
+    label: 'Out of Stock',
+  },
 }
 
-// =======================================================
-// Extended Pharmacy Card
-// =======================================================
-function NearbyPharmacyCard({ pharmacy, isSelected, onSelect, onViewDetails, onReserve, onViewOnMap }) {
+const TRUST_CONFIG = {
+  verified: {
+    label: 'Verified batch',
+    className: 'bg-success-50 text-success-700',
+  },
+  distributor: {
+    label: 'Distributor verified',
+    className: 'bg-warning-50 text-warning-700',
+  },
+  unverified: {
+    label: 'Unverified batch',
+    className: 'bg-slate-100 text-slate-600',
+  },
+}
+
+
+function formatPrice(value) {
+  const price = Number(value)
+
+  if (!Number.isFinite(price)) {
+    return 'Not available'
+  }
+
+  return `₹${price.toFixed(2)}`
+}
+
+
+function formatWsmScore(value) {
+  const score = Number(value)
+
+  if (!Number.isFinite(score)) {
+    return null
+  }
+
+  return {
+    decimal: score.toFixed(4),
+    percentage: `${(score * 100).toFixed(1)}%`,
+  }
+}
+
+
+function WsmRankingPanel({ pharmacy }) {
+  if (!pharmacy.rank || pharmacy.wsmScore == null) {
+    return null
+  }
+
+  const score = formatWsmScore(pharmacy.wsmScore)
+  const trust =
+    TRUST_CONFIG[pharmacy.verificationStatus] ??
+    TRUST_CONFIG.unverified
+
+  return (
+    <div
+      className="rounded-xl border border-primary-100
+                 bg-primary-50/60 p-3"
+    >
+      <div
+        className="flex flex-wrap items-center
+                   justify-between gap-2"
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className="rounded-full bg-primary-600 px-3 py-1
+                       text-xs font-bold text-white"
+          >
+            Rank #{pharmacy.rank}
+          </span>
+
+          <span className="text-xs font-semibold text-primary-800">
+            Smart recommendation
+          </span>
+        </div>
+
+        {score && (
+          <div className="text-right">
+            <p className="text-sm font-bold text-primary-700">
+              {score.decimal}
+            </p>
+            <p className="text-[10px] text-primary-600">
+              WSM score ({score.percentage})
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div
+        className="mt-3 grid grid-cols-2 gap-2
+                   text-xs sm:grid-cols-4"
+      >
+        <div className="rounded-lg bg-white p-2">
+          <p className="text-slate-400">Price</p>
+          <p className="mt-0.5 font-bold text-slate-800">
+            {formatPrice(pharmacy.price)}
+          </p>
+        </div>
+
+        <div className="rounded-lg bg-white p-2">
+          <p className="text-slate-400">Quantity</p>
+          <p className="mt-0.5 font-bold text-slate-800">
+            {pharmacy.totalQty ?? 0}
+          </p>
+        </div>
+
+        <div className="rounded-lg bg-white p-2">
+          <p className="text-slate-400">Freshness</p>
+          <p className="mt-0.5 font-bold text-slate-800">
+            {pharmacy.daysToExpiry != null
+              ? `${pharmacy.daysToExpiry} days`
+              : 'Not available'}
+          </p>
+        </div>
+
+        <div className="rounded-lg bg-white p-2">
+          <p className="text-slate-400">Trust</p>
+          <span
+            className={`mt-1 inline-flex rounded-full px-2 py-0.5
+                        text-[10px] font-semibold ${trust.className}`}
+          >
+            {trust.label}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+function NearbyPharmacyCard({
+  pharmacy,
+  isSelected,
+  onSelect,
+  onViewDetails,
+  onReserve,
+  onViewOnMap,
+}) {
   const [saved, setSaved] = useState(false)
-  const avail = AVAIL_CONFIG[pharmacy.availability] ?? AVAIL_CONFIG.available
+
+  const availability =
+    AVAILABILITY_CONFIG[pharmacy.availability] ??
+    AVAILABILITY_CONFIG.available
 
   return (
     <article
-      aria-label={`${pharmacy.name} — ${pharmacy.isOpen ? 'Open' : 'Closed'} — ${avail.label}`}
+      aria-label={`${pharmacy.name} — ${availability.label}`}
       onClick={() => onSelect?.(pharmacy.id)}
       className={[
-        'relative flex flex-col gap-3 p-5 rounded-2xl bg-white border cursor-pointer',
-        'hover:shadow-md hover:-translate-y-0.5 transition-all duration-200',
+        'relative flex cursor-pointer flex-col gap-3 rounded-2xl',
+        'border bg-white p-5 transition-all duration-200',
+        'hover:-translate-y-0.5 hover:shadow-md',
         isSelected
           ? 'border-2 border-primary-400 ring-2 ring-primary-100 shadow-md'
           : 'border-slate-100 shadow-sm',
       ].join(' ')}
     >
-      {/* Selected indicator */}
       {isSelected && (
-        <div className="absolute top-3 right-3">
-          <Badge variant="primary" size="sm" dot>Selected</Badge>
+        <div className="absolute right-3 top-3">
+          <Badge variant="primary" size="sm" dot>
+            Selected
+          </Badge>
         </div>
       )}
 
-      {/* Top row */}
       <div className="flex items-start gap-3">
-        <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-secondary-50 shrink-0">
-          <MdLocalPharmacy size={22} className="text-secondary-600" aria-hidden="true" />
+        <div
+          className="flex h-11 w-11 shrink-0 items-center
+                     justify-center rounded-xl bg-secondary-50"
+        >
+          <MdLocalPharmacy
+            size={22}
+            className="text-secondary-600"
+            aria-hidden="true"
+          />
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-2 flex-wrap mb-1">
-            <h3 className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{pharmacy.name}</h3>
-            {pharmacy.isJanAushadhi && <Badge variant="info" size="sm">Jan Aushadhi</Badge>}
+
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-start gap-2">
+            <h3
+              className="max-w-[260px] truncate text-sm
+                         font-bold text-slate-900"
+            >
+              {pharmacy.name}
+            </h3>
+
+            {pharmacy.isJanAushadhi && (
+              <Badge variant="info" size="sm">
+                Jan Aushadhi
+              </Badge>
+            )}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant={pharmacy.isOpen ? 'success' : 'danger'} dot size="sm">
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant={pharmacy.isOpen ? 'success' : 'danger'}
+              dot
+              size="sm"
+            >
               {pharmacy.isOpen ? 'Open' : 'Closed'}
             </Badge>
-            <Badge variant={avail.variant} size="sm">{avail.label}</Badge>
+
+            <Badge variant={availability.variant} size="sm">
+              {availability.label}
+            </Badge>
           </div>
         </div>
       </div>
 
-      {/* Address */}
       <div className="flex items-start gap-1.5 text-xs text-slate-500">
-        <HiOutlineMapPin size={12} className="mt-0.5 shrink-0 text-slate-400" aria-hidden="true" />
+        <HiOutlineMapPin
+          size={12}
+          className="mt-0.5 shrink-0 text-slate-400"
+          aria-hidden="true"
+        />
         <span>{pharmacy.address}</span>
       </div>
 
-      {/* Meta grid */}
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+      <div
+        className="grid grid-cols-2 gap-x-4 gap-y-1
+                   text-xs text-slate-500"
+      >
         <span className="flex items-center gap-1">
-          <HiOutlineMapPin size={11} className="text-secondary-400" aria-hidden="true" />
+          <HiOutlineMapPin
+            size={11}
+            className="text-secondary-400"
+            aria-hidden="true"
+          />
           {pharmacy.distance}
         </span>
+
         <span className="flex items-center gap-1">
           <HiOutlineTruck size={11} aria-hidden="true" />
           {pharmacy.travelTime}
         </span>
+
         <span className="flex items-center gap-1">
           <HiOutlineClock size={11} aria-hidden="true" />
           {pharmacy.hours}
         </span>
+
         <span className="flex items-center gap-1">
-          <HiOutlineStar size={11} className="text-warning-400" aria-hidden="true" />
+          <HiOutlineStar
+            size={11}
+            className="text-warning-400"
+            aria-hidden="true"
+          />
           {pharmacy.rating} ({pharmacy.ratingCount})
         </span>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+      <WsmRankingPanel pharmacy={pharmacy} />
+
+      <div
+        className="flex flex-wrap items-center gap-2
+                   border-t border-slate-100 pt-2"
+      >
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onViewDetails?.(pharmacy.id) }}
-          aria-label={`View details for ${pharmacy.name}`}
-          className="flex-1 text-xs font-semibold py-2 rounded-xl bg-secondary-600 text-white hover:bg-secondary-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-500"
+          onClick={event => {
+            event.stopPropagation()
+            onViewDetails?.(pharmacy.id)
+          }}
+          className="min-w-[140px] flex-1 rounded-xl
+                     bg-secondary-600 py-2 text-xs font-semibold
+                     text-white hover:bg-secondary-700"
         >
           View Details
         </button>
 
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onViewOnMap?.(pharmacy.id) }}
-          aria-label={`View ${pharmacy.name} on map`}
-          className="flex items-center justify-center gap-1 px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-600 hover:border-secondary-300 hover:text-secondary-600 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-500"
+          onClick={event => {
+            event.stopPropagation()
+            onViewOnMap?.(pharmacy.id)
+          }}
+          className="flex items-center justify-center gap-1
+                     rounded-xl border border-slate-200 px-3 py-2
+                     text-xs text-slate-600 hover:border-secondary-300
+                     hover:text-secondary-600"
         >
-          <HiOutlineMapPin size={13} aria-hidden="true" />
+          <HiOutlineMapPin size={13} />
           Map
         </button>
 
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onReserve?.(pharmacy.id) }}
-          aria-label={`Reserve medicine at ${pharmacy.name}`}
+          onClick={event => {
+            event.stopPropagation()
+            onReserve?.(pharmacy.id)
+          }}
           disabled={pharmacy.availability === 'unavailable'}
-          className="flex items-center justify-center gap-1 px-3 py-2 rounded-xl border border-success-300 text-xs text-success-700 hover:bg-success-50 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-success-500 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center justify-center gap-1
+                     rounded-xl border border-success-300 px-3 py-2
+                     text-xs text-success-700 hover:bg-success-50
+                     disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <HiOutlineCalendarDays size={13} aria-hidden="true" />
+          <HiOutlineCalendarDays size={13} />
           Reserve
         </button>
 
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); setSaved(s => !s) }}
-          aria-label={saved ? `Remove ${pharmacy.name} from saved` : `Save ${pharmacy.name}`}
+          onClick={event => {
+            event.stopPropagation()
+            setSaved(current => !current)
+          }}
+          aria-label={saved ? 'Remove saved Kendra' : 'Save Kendra'}
           aria-pressed={saved}
-          className="flex items-center justify-center w-8 h-8 rounded-xl border border-slate-200 text-slate-400 hover:text-warning-500 hover:border-warning-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning-400"
+          className="flex h-8 w-8 items-center justify-center
+                     rounded-xl border border-slate-200 text-slate-400
+                     hover:border-warning-300 hover:text-warning-500"
         >
-          {saved ? <HiBookmark size={14} aria-hidden="true" /> : <HiOutlineBookmark size={14} aria-hidden="true" />}
+          {saved ? (
+            <HiBookmark size={14} />
+          ) : (
+            <HiOutlineBookmark size={14} />
+          )}
         </button>
 
         <a
-          href={`tel:${pharmacy.phone?.replace(/\s/g,'')}`}
-          onClick={(e) => e.stopPropagation()}
+          href={
+            pharmacy.phone
+              ? `tel:${pharmacy.phone.replace(/\s/g, '')}`
+              : undefined
+          }
+          onClick={event => event.stopPropagation()}
           aria-label={`Call ${pharmacy.name}`}
-          className="flex items-center justify-center w-8 h-8 rounded-xl border border-slate-200 text-slate-400 hover:text-secondary-600 hover:border-secondary-300 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-500"
+          className="flex h-8 w-8 items-center justify-center
+                     rounded-xl border border-slate-200 text-slate-400
+                     hover:border-secondary-300 hover:text-secondary-600"
         >
-          <HiOutlinePhone size={14} aria-hidden="true" />
+          <HiOutlinePhone size={14} />
         </a>
       </div>
     </article>
   )
 }
 
-// =======================================================
-// Nearby Pharmacy List
-// =======================================================
-function NearbyPharmacyList({ pharmacies = [], selectedId, onSelect, onViewDetails, onReserve }) {
+
+function NearbyPharmacyList({
+  pharmacies = [],
+  selectedId,
+  onSelect,
+  onViewDetails,
+  onReserve,
+}) {
   function handleViewOnMap(id) {
     onSelect?.(id)
-    // Scroll to map is handled by the parent
+
+    document
+      .getElementById('interactive-map-section')
+      ?.scrollIntoView({ behavior: 'smooth' })
   }
 
   return (
     <section aria-labelledby="pharmacy-list-heading">
+      <div
+        className="mb-4 flex items-center
+                   justify-between gap-3"
+      >
+        <h2
+          id="pharmacy-list-heading"
+          className="text-base font-bold text-slate-900"
+        >
+          {pharmacies.some(pharmacy => pharmacy.rank)
+            ? 'Recommended Kendras'
+            : 'Nearby Pharmacies'}
+        </h2>
 
-      {/* =======================================================
-          Nearby Pharmacies
-         ======================================================= */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 id="pharmacy-list-heading" className="text-base font-bold text-slate-900">
-            Nearby Pharmacies
-          </h2>
-          <Badge variant="primary" size="sm">
-            {pharmacies.length} found
-          </Badge>
-        </div>
-
-        {pharmacies.length === 0 ? (
-          <p className="text-center py-10 text-sm text-slate-400">
-            No Jan Aushadhi Kendras found within range.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-4" role="list" aria-label="Nearby pharmacy list">
-            {pharmacies.map((pharmacy) => (
-              <div key={pharmacy.id} role="listitem">
-                <NearbyPharmacyCard
-                  pharmacy={pharmacy}
-                  isSelected={pharmacy.id === selectedId}
-                  onSelect={onSelect}
-                  onViewDetails={onViewDetails}
-                  onReserve={onReserve}
-                  onViewOnMap={handleViewOnMap}
-                />
-              </div>
-            ))}
-          </div>
-        )}
+        <Badge variant="primary" size="sm">
+          {pharmacies.length} found
+        </Badge>
       </div>
+
+      {pharmacies.length === 0 ? (
+        <p className="py-10 text-center text-sm text-slate-400">
+          No Jan Aushadhi Kendras found within range.
+        </p>
+      ) : (
+        <div
+          className="flex flex-col gap-4"
+          role="list"
+          aria-label="Nearby pharmacy list"
+        >
+          {pharmacies.map(pharmacy => (
+            <div key={pharmacy.id} role="listitem">
+              <NearbyPharmacyCard
+                pharmacy={pharmacy}
+                isSelected={pharmacy.id === selectedId}
+                onSelect={onSelect}
+                onViewDetails={onViewDetails}
+                onReserve={onReserve}
+                onViewOnMap={handleViewOnMap}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   )
 }
+
 
 export default NearbyPharmacyList

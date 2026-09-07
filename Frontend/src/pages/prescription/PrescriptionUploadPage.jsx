@@ -11,6 +11,7 @@ import {
 } from 'react-icons/hi2'
 
 import ocrService from '../../services/ocrService'
+import medicineService from '../../services/medicineService'
 
 
 const ALLOWED_FILE_TYPES = [
@@ -56,6 +57,10 @@ function PrescriptionUploadPage() {
   const [isScanning, setIsScanning] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState('')
+  const [manualQueries, setManualQueries] = useState({})
+  const [manualResults, setManualResults] = useState({})
+  const [manualLoading, setManualLoading] = useState({})
+  const [manualErrors, setManualErrors] = useState({})
 
 
   useEffect(() => {
@@ -71,6 +76,10 @@ function PrescriptionUploadPage() {
     setError('')
     setScanResult(null)
     setSelectedCandidate(null)
+    setManualQueries({})
+    setManualResults({})
+    setManualLoading({})
+    setManualErrors({})
 
     if (!file) {
       return
@@ -134,6 +143,10 @@ function PrescriptionUploadPage() {
     setPreviewUrl('')
     setScanResult(null)
     setSelectedCandidate(null)
+    setManualQueries({})
+    setManualResults({})
+    setManualLoading({})
+    setManualErrors({})
     setError('')
 
     if (inputRef.current) {
@@ -154,6 +167,10 @@ function PrescriptionUploadPage() {
     setError('')
     setScanResult(null)
     setSelectedCandidate(null)
+    setManualQueries({})
+    setManualResults({})
+    setManualLoading({})
+    setManualErrors({})
 
     try {
       const response =
@@ -175,7 +192,112 @@ function PrescriptionUploadPage() {
     }
   }
 
+  const handleManualQueryChange = (index, value) => {
+  setSelectedCandidate(null)
 
+  setManualQueries((previous) => ({
+    ...previous,
+    [index]: value,
+  }))
+
+  setManualResults((previous) => ({
+    ...previous,
+    [index]: [],
+  }))
+
+  setManualErrors((previous) => ({
+    ...previous,
+    [index]: '',
+  }))
+}
+
+
+const handleManualSearch = async (index) => {
+  const query = String(
+    manualQueries[index] ?? '',
+  ).trim()
+
+  if (query.length < 2) {
+    setManualErrors((previous) => ({
+      ...previous,
+      [index]: (
+        'Enter at least two characters from the ' +
+        'confirmed medicine name.'
+      ),
+    }))
+    return
+  }
+
+  setManualLoading((previous) => ({
+    ...previous,
+    [index]: true,
+  }))
+
+  setManualErrors((previous) => ({
+    ...previous,
+    [index]: '',
+  }))
+
+  setManualResults((previous) => ({
+    ...previous,
+    [index]: [],
+  }))
+
+  try {
+    const response = await medicineService.search({
+      q: query,
+      page: 1,
+      page_size: 5,
+    })
+
+    const results = response?.data?.results ?? []
+
+    setManualResults((previous) => ({
+      ...previous,
+      [index]: results,
+    }))
+
+    if (results.length === 0) {
+      setManualErrors((previous) => ({
+        ...previous,
+        [index]: (
+          'No catalogue medicine matched the corrected text.'
+        ),
+      }))
+    }
+  } catch (requestError) {
+    setManualErrors((previous) => ({
+      ...previous,
+      [index]: (
+        requestError?.response?.data?.detail ||
+        requestError?.message ||
+        'Unable to search the medicine catalogue.'
+      ),
+    }))
+  } finally {
+    setManualLoading((previous) => ({
+      ...previous,
+      [index]: false,
+    }))
+  }
+}
+
+
+const handleManualCandidateSelect = (medicine) => {
+  setSelectedCandidate({
+    medicine_id: medicine.id,
+    pmbi_code: medicine.pmbi_code,
+    brand_name: medicine.brand_name,
+    generic_name: medicine.generic_name,
+    composition: medicine.composition,
+    jan_aushadhi_mrp: medicine.jan_aushadhi_mrp,
+    branded_avg_mrp: medicine.branded_avg_mrp,
+    saving_pct: medicine.saving_pct,
+    manually_corrected: true,
+  })
+
+  setError('')
+}
   const handleConfirmMedicine = () => {
     const confirmedCandidate = selectedCandidate
 
@@ -665,35 +787,221 @@ function PrescriptionUploadPage() {
 
 
               <div className="mt-4 space-y-3">
-                {unmatchedLines.map((item, index) => (
-                  <div
-                    key={`${item.ocr_text}-${index}`}
-                    className="rounded-lg border border-amber-200 bg-white p-3"
+  {unmatchedLines.map((item, index) => {
+    const query = manualQueries[index] ?? ''
+    const results = manualResults[index] ?? []
+    const isSearching = Boolean(
+      manualLoading[index],
+    )
+    const searchError = manualErrors[index] ?? ''
+
+    return (
+      <div
+        key={`${item.ocr_text}-${index}`}
+        className="rounded-lg border border-amber-200 bg-white p-3"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-slate-900">
+              {item.ocr_text}
+            </p>
+
+            <p className="mt-1 text-sm text-amber-800">
+              {item.reason ||
+                'Confirm the medicine name and strength with a pharmacist.'}
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500">
+              OCR confidence:{' '}
+              {formatConfidence(
+                item.ocr_confidence,
+              )}
+            </p>
+          </div>
+
+          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+            Manual review
+          </span>
+        </div>
+
+
+        <div className="mt-4 border-t border-amber-100 pt-4">
+          <label
+            htmlFor={`manual-medicine-${index}`}
+            className="text-sm font-semibold text-slate-700"
+          >
+            Enter the confirmed medicine name and strength
+          </label>
+
+          <p className="mt-1 text-xs text-slate-500">
+            Ask the doctor or pharmacist before entering a
+            correction. Do not guess from the OCR text.
+          </p>
+
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <input
+              id={`manual-medicine-${index}`}
+              type="text"
+              value={query}
+              onChange={(event) =>
+                handleManualQueryChange(
+                  index,
+                  event.target.value,
+                )
+              }
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  handleManualSearch(index)
+                }
+              }}
+              placeholder="Example: confirmed medicine and strength"
+              autoComplete="off"
+              className={[
+                'min-w-0 flex-1 rounded-lg border',
+                'border-slate-300 px-3 py-2',
+                'text-sm text-slate-900',
+                'outline-none',
+                'focus:border-primary-500',
+                'focus:ring-2 focus:ring-primary-100',
+              ].join(' ')}
+            />
+
+            <button
+              type="button"
+              onClick={() =>
+                handleManualSearch(index)
+              }
+              disabled={
+                isSearching ||
+                query.trim().length < 2
+              }
+              className={[
+                'rounded-lg px-4 py-2',
+                'text-sm font-semibold text-white',
+                isSearching ||
+                query.trim().length < 2
+                  ? 'cursor-not-allowed bg-primary-300'
+                  : 'bg-primary-600 hover:bg-primary-700',
+              ].join(' ')}
+            >
+              {isSearching
+                ? 'Searching…'
+                : 'Search Catalogue'}
+            </button>
+          </div>
+
+
+          {searchError && (
+            <p className="mt-2 text-sm text-red-600">
+              {searchError}
+            </p>
+          )}
+
+
+          {results.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Possible catalogue results
+              </p>
+
+              {results.map((medicine) => {
+                const isSelected =
+                  selectedCandidate?.medicine_id ===
+                  medicine.id
+
+                return (
+                  <button
+                    type="button"
+                    key={
+                      medicine.id ||
+                      medicine.pmbi_code
+                    }
+                    onClick={() =>
+                      handleManualCandidateSelect(
+                        medicine,
+                      )
+                    }
+                    className={[
+                      'w-full rounded-lg border p-3',
+                      'text-left transition-colors',
+                      isSelected
+                        ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-100'
+                        : 'border-slate-200 hover:border-primary-300',
+                    ].join(' ')}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-slate-900">
-                          {item.ocr_text}
+                          {medicine.generic_name ||
+                            'Unknown medicine'}
                         </p>
 
-                        <p className="mt-1 text-sm text-amber-800">
-                          {item.reason || 'Confirm the medicine name and strength with a pharmacist.'}
+                        <p className="mt-1 text-sm text-slate-500">
+                          Brand:{' '}
+                          {medicine.brand_name ||
+                            'Not available'}
                         </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          OCR confidence:{' '}
-                          {formatConfidence(
-                            item.ocr_confidence,
+
+                        <p className="mt-1 text-xs text-slate-400">
+                          {medicine.composition ||
+                            'Composition not available'}
+                        </p>
+                      </div>
+
+                      {isSelected && (
+                        <HiOutlineCheckCircle
+                          className="shrink-0 text-primary-600"
+                          size={23}
+                        />
+                      )}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-lg bg-green-50 p-2">
+                        <p className="text-xs text-green-600">
+                          Jan Aushadhi
+                        </p>
+
+                        <p className="font-bold text-green-700">
+                          {formatPrice(
+                            medicine.jan_aushadhi_mrp,
                           )}
                         </p>
                       </div>
 
-                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
-                        Manual review
-                      </span>
+                      <div className="rounded-lg bg-slate-100 p-2">
+                        <p className="text-xs text-slate-500">
+                          Brand price
+                        </p>
+
+                        <p className="font-bold text-slate-700">
+                          {formatPrice(
+                            medicine.branded_avg_mrp,
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg bg-blue-50 p-2">
+                        <p className="text-xs text-blue-600">
+                          Savings
+                        </p>
+
+                        <p className="font-bold text-blue-700">
+                          {medicine.saving_pct ?? 0}%
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  })}
+</div>
 
 
               <p className="mt-4 text-xs font-medium text-red-600">
@@ -701,6 +1009,23 @@ function PrescriptionUploadPage() {
                 based only on OCR results. Ask a doctor or
                 pharmacist to confirm them.
               </p>
+
+              {selectedCandidate?.manually_corrected && (
+  <button
+    type="button"
+    onClick={handleConfirmMedicine}
+    className={[
+      'mt-4 flex w-full items-center',
+      'justify-center gap-2 rounded-xl',
+      'bg-green-600 px-5 py-3',
+      'font-semibold text-white',
+      'hover:bg-green-700',
+    ].join(' ')}
+  >
+    <HiOutlineCheckCircle size={21} />
+    View Selected Catalogue Medicine
+  </button>
+)}
             </div>
           )}
         </section>

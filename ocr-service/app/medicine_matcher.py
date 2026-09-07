@@ -152,6 +152,41 @@ RX_RE = re.compile(
     re.IGNORECASE,
 )
 
+NON_MEDICINE_METADATA_PHRASES = {
+    "mbbs",
+    "consultant physician",
+    "consultation by appointment",
+    "consultation by appointments",
+    "medicare centre",
+    "medicare center",
+    "court back road",
+    "sunday holiday",
+    "timing",
+    "phone",
+    "mobile",
+    "mob",
+    "clinic",
+    "registration number",
+    "reg no",
+    "udupi",
+}
+
+MEDICINE_HINT_RE = re.compile(
+    r"("
+    r"\b\d{2,4}\s*(?:mg|mcg|g|ml|iu|units?)?\b"
+    r"|"
+    r"\b(?:tab(?:let)?s?|cap(?:sule)?s?|syrup|"
+    r"injection|inj|cream|ointment|drops?|"
+    r"solution|suspension|gel|pen|cv)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+DATE_LIKE_RE = re.compile(
+    r"^\s*\d{1,2}\s*[-/.]\s*\d{1,2}"
+    r"\s*[-/.]\s*\d{2,4}\s*$"
+)
+
 
 # =====================================================
 # Text normalization
@@ -298,79 +333,141 @@ def should_show_as_unmatched(value: str) -> bool:
 # =====================================================
 # Prescription medicine region
 # =====================================================
+def looks_like_fallback_medicine_line(
+    value: str,
+) -> bool:
+    """
+    Conservatively select possible medicine lines when
+    PaddleOCR fails to recognize the Rx marker.
+
+    This function intentionally prefers manual review over
+    treating clinic or patient information as medicine.
+    """
+
+    original = str(value).strip()
+    normalized = normalize_text(original)
+
+    if not normalized:
+        return False
+
+    if is_non_medicine_line(original):
+        return False
+
+    if DATE_LIKE_RE.match(original):
+        return False
+
+    for phrase in NON_MEDICINE_METADATA_PHRASES:
+        if phrase in normalized:
+            return False
+
+    # Remove obvious contact numbers and postal-code lines.
+    digit_count = len(re.findall(r"\d", original))
+
+    if digit_count >= 6:
+        return False
+
+    if not re.search(r"[a-zA-Z]{2,}", original):
+        return False
+
+        # A medicine clue such as tablet, capsule, pen or mg
+    # provides strong evidence.
+    if MEDICINE_HINT_RE.search(original):
+        return True
+
+    # PaddleOCR may merge words:
+    # "Mix-30 Pen ..." -> "m1x-30Pencnendf"
+    compact = re.sub(
+        r"[^a-z0-9]",
+        "",
+        normalized,
+    )
+
+    merged_form_words = {
+        "tablet",
+        "tab",
+        "capsule",
+        "cap",
+        "syrup",
+        "injection",
+        "inj",
+        "cream",
+        "drops",
+        "solution",
+        "pen",
+    }
+
+    if any(
+        form_word in compact
+        for form_word in merged_form_words
+    ):
+        return True
+
+    # Conservative final fallback:
+    # keep short alphanumeric handwritten lines such as
+    # "Mix-30", but reject long metadata/contact lines.
+    has_letters = bool(
+        re.search(r"[a-zA-Z]{2,}", original)
+    )
+    has_digits = bool(re.search(r"\d", original))
+
+    if (
+        has_letters
+        and has_digits
+        and len(normalized) <= 45
+        and digit_count <= 5
+    ):
+        return True
+
+    return False
 
 def get_medication_region(
     ocr_lines: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """
-    Locate the medicine section.
+    Locate likely medicine lines.
 
-    A standalone 'Px' is considered a possible misread Rx
-    only with patient-header and spatial medicine context.
+    When Rx is detected, use the text between Rx and the
+    doctor/signature section.
+
+    When Rx is not detected, use a conservative medicine-line
+    classifier so headers, addresses and footers are excluded.
     """
-    start_index = None
-    first_line = None
+
+    start_index: int | None = None
+    first_line: dict[str, Any] | None = None
 
     for index, item in enumerate(ocr_lines):
         text = str(item.get("text", "")).strip()
-        rx = RX_RE.match(text)
+        normalized = normalize_text(text)
+        rx_match = RX_RE.match(text)
 
-        marker = bool(rx) or normalize_text(text) in {
+        marker_found = bool(rx_match) or normalized in {
             "rx",
             "r x",
             "r",
             "℞",
         }
 
-        if normalize_text(text) == "px":
-            before = ocr_lines[:index]
-            after = ocr_lines[index + 1:index + 4]
+        # PaddleOCR sometimes reads Rx as Px.
+        if normalized == "px":
+            following_items = ocr_lines[
+                index + 1:index + 5
+            ]
 
-            header_seen = any(
-                HEADER_RE.search(
-                    str(previous.get("text", ""))
+            marker_found = any(
+                looks_like_fallback_medicine_line(
+                    str(following.get("text", ""))
                 )
-                for previous in before
+                for following in following_items
             )
 
-            box = item.get("box")
-            marker = False
+        if not marker_found:
+            continue
 
-            if (
-                header_seen
-                and isinstance(box, list)
-                and len(box) == 4
-            ):
-                for following in after:
-                    following_text = str(
-                        following.get("text", "")
-                    )
-                    following_box = following.get("box")
+        start_index = index + 1
 
-                    medicine_hint = bool(
-                        re.search(
-                            r"\d|caps?\b|tabs?\b|mg\b",
-                            following_text,
-                            re.IGNORECASE,
-                        )
-                    )
-
-                    if (
-                        medicine_hint
-                        and not is_non_medicine_line(
-                            following_text
-                        )
-                        and isinstance(following_box, list)
-                        and len(following_box) == 4
-                        and following_box[1] >= box[1]
-                        and following_box[0] > box[0]
-                    ):
-                        marker = True
-                        break
-
-        if marker:
-            start_index = index + 1
-            remainder = rx.group(1).strip() if rx else ""
+        if rx_match:
+            remainder = rx_match.group(1).strip()
 
             if remainder:
                 first_line = {
@@ -379,28 +476,36 @@ def get_medication_region(
                     "source_ocr_text": text,
                 }
 
-            break
+        break
 
-    items = (
-        ocr_lines[start_index:]
-        if start_index is not None
-        else ocr_lines
-    )
+    # Rx was not recognized. Do not return every OCR line.
+    if start_index is None:
+        return [
+            item
+            for item in ocr_lines
+            if looks_like_fallback_medicine_line(
+                str(item.get("text", ""))
+            )
+        ]
 
-    result = (
-        [first_line]
-        if first_line
-        and should_check_line(first_line["text"])
-        else []
-    )
+    medication_lines: list[dict[str, Any]] = []
 
-    for item in items:
+    if (
+        first_line is not None
+        and should_check_line(
+            str(first_line.get("text", ""))
+        )
+    ):
+        medication_lines.append(first_line)
+
+    for item in ocr_lines[start_index:]:
         text = str(item.get("text", "")).strip()
+        normalized = normalize_text(text)
 
-        if start_index is not None and END_RE.search(text):
+        if END_RE.search(text):
             break
 
-        if normalize_text(text) in {
+        if normalized in {
             "px",
             "rx",
             "r",
@@ -408,10 +513,13 @@ def get_medication_region(
         }:
             continue
 
-        if should_check_line(text):
-            result.append(item)
+        if is_non_medicine_line(text):
+            continue
 
-    return result
+        if should_check_line(text):
+            medication_lines.append(item)
+
+    return medication_lines
 
 
 # =====================================================

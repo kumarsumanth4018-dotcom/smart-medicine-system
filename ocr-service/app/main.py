@@ -17,6 +17,7 @@ from app.handwriting_fallback import (
     run_handwriting_fallback,
 )
 from app.medicine_matcher import (
+    load_medicine_catalog,
     match_ocr_medicines,
 )
 from app.ocr_engine import (
@@ -405,12 +406,21 @@ async def scan_prescription(
         stage_started = time.perf_counter()
         if unmatched_lines:
             try:
+                # Reuses medicine_matcher's own short-lived cache, so
+                # this is effectively free after the first fetch —
+                # it lets the handwriting fallback pick whichever
+                # beam candidate actually matches a real medicine,
+                # instead of only ever trying the model's single top
+                # guess.
+                rerank_catalog = await load_medicine_catalog()
+
                 handwriting_result = (
                     await asyncio.to_thread(
                         run_handwriting_fallback,
                         temporary_path,
                         paddle_result["lines"],
                         unmatched_lines,
+                        rerank_catalog,
                     )
                 )
 

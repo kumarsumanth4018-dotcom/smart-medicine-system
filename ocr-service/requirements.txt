@@ -11,3 +11,5 @@ torchvision
 transformers>=4.46,<5
 sentencepiece
 pillow
+numpy
+opencv-python-headless

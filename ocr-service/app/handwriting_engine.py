@@ -11,6 +11,19 @@ from transformers import (
     VisionEncoderDecoderModel,
 )
 
+# cv2 ships in transitively via paddleocr's own dependencies, so this
+# does not add a new requirement. It's only used for adaptive
+# thresholding (binarize_image below); if it's ever unavailable for
+# some reason, that function falls back to a pure-PIL global Otsu
+# threshold instead of failing outright.
+try:
+    import cv2
+    import numpy as np
+
+    _CV2_AVAILABLE = True
+except ImportError:
+    _CV2_AVAILABLE = False
+
 # Pillow moved resampling constants to Image.Resampling in 9.1+ but
 # kept the old top-level names as aliases for now; this works across
 # both old and new Pillow versions without relying on either alone.
@@ -187,15 +200,135 @@ def prepare_handwriting_image(
     return grayscale.convert("RGB")
 
 
+def binarize_image(
+    grayscale_image: Image.Image,
+) -> Image.Image:
+    """
+    Separate ink from paper more aggressively than plain contrast
+    enhancement — specifically aimed at joined/cursive strokes that
+    are faint, and at photographs with uneven lighting (a shadow, a
+    fold crease, a slightly yellowed page).
+
+    Uses adaptive (locally-varying) thresholding via cv2 when
+    available, which handles uneven lighting far better than a single
+    global cutoff — a crease or shadow on one part of the page won't
+    wash out ink on another part. Falls back to a pure-PIL global
+    Otsu threshold if cv2 isn't importable for some reason.
+    """
+
+    if _CV2_AVAILABLE:
+        array = np.array(grayscale_image)
+
+        binary = cv2.adaptiveThreshold(
+            array,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            blockSize=25,
+            C=15,
+        )
+
+        return Image.fromarray(binary)
+
+    # Pure-PIL fallback: global Otsu threshold from the histogram.
+    histogram = grayscale_image.histogram()
+    total = sum(histogram)
+
+    if total == 0:
+        return grayscale_image
+
+    sum_all = sum(i * h for i, h in enumerate(histogram))
+
+    sum_background = 0.0
+    weight_background = 0
+    best_threshold = 0
+    best_variance = 0.0
+
+    for t in range(256):
+        weight_background += histogram[t]
+
+        if weight_background == 0:
+            continue
+
+        weight_foreground = total - weight_background
+
+        if weight_foreground == 0:
+            break
+
+        sum_background += t * histogram[t]
+
+        mean_background = sum_background / weight_background
+        mean_foreground = (
+            (sum_all - sum_background) / weight_foreground
+        )
+
+        between_class_variance = (
+            weight_background
+            * weight_foreground
+            * (mean_background - mean_foreground) ** 2
+        )
+
+        if between_class_variance > best_variance:
+            best_variance = between_class_variance
+            best_threshold = t
+
+    return grayscale_image.point(
+        lambda p: 255 if p > best_threshold else 0
+    )
+
+
+def prepare_handwriting_image_binarized(
+    image: Image.Image,
+) -> Image.Image:
+    """
+    A second preprocessing variant of prepare_handwriting_image, that
+    binarizes instead of just enhancing contrast/sharpness. Some
+    words read better from a clean binary image (ink vs. no ink);
+    others read better from the softer, greyscale version — rather
+    than guess which, both variants get tried and the medicine
+    catalog re-ranking (pick_best_candidate) decides which result to
+    keep.
+    """
+
+    image = image.convert("RGB")
+    grayscale = ImageOps.grayscale(image)
+
+    target_height = 64
+    width, height = grayscale.size
+
+    if height > 0 and height < target_height:
+        scale = target_height / height
+        new_size = (
+            max(1, round(width * scale)),
+            target_height,
+        )
+        grayscale = grayscale.resize(
+            new_size,
+            resample=_LANCZOS,
+        )
+
+    grayscale = binarize_image(grayscale)
+
+    padding = 16
+    grayscale = ImageOps.expand(
+        grayscale,
+        border=padding,
+        fill="white",
+    )
+
+    return grayscale.convert("RGB")
+
+
 # =====================================================
 # Confidence calculation
 # =====================================================
 
 def calculate_generation_confidence(
     generation_output: Any,
+    sequence_index: int = 0,
 ) -> float:
     """
-    Convert the model sequence score into an approximate
+    Convert one candidate sequence's score into an approximate
     confidence value between zero and one.
 
     This confidence is only an indication. It is not a
@@ -211,11 +344,11 @@ def calculate_generation_confidence(
     if sequence_scores is None:
         return 0.0
 
-    if len(sequence_scores) == 0:
+    if len(sequence_scores) <= sequence_index:
         return 0.0
 
     score = float(
-        sequence_scores[0].detach().cpu().item()
+        sequence_scores[sequence_index].detach().cpu().item()
     )
 
     confidence = math.exp(score)
@@ -232,22 +365,20 @@ def calculate_generation_confidence(
 # Recognize one handwriting line
 # =====================================================
 
-def recognize_handwritten_line(
-    line_image: Image.Image,
-) -> dict[str, Any]:
+def _recognize_prepared_image_candidates(
+    prepared_image: Image.Image,
+    num_candidates: int = 3,
+) -> list[dict[str, Any]]:
     """
-    Recognize text from one cropped handwritten line.
-
-    Important:
-        Do not pass a complete multi-line prescription.
-        Pass a cropped image containing one text line.
+    Shared core: run the model on an ALREADY-preprocessed image and
+    decode multiple candidate sequences. Both
+    recognize_handwritten_line_candidates (plain preprocessing) and
+    recognize_handwritten_line_multi_preprocessing (plain +
+    binarized) call this so the actual generate()/decode logic exists
+    in exactly one place.
     """
 
     processor, model = get_handwriting_engine()
-
-    prepared_image = prepare_handwriting_image(
-        line_image
-    )
 
     pixel_values = processor(
         images=prepared_image,
@@ -256,32 +387,176 @@ def recognize_handwritten_line(
 
     pixel_values = pixel_values.to("cpu")
 
+    # num_return_sequences cannot exceed num_beams in beam search —
+    # cap it so a low HANDWRITING_NUM_BEAMS doesn't error out.
+    return_count = max(
+        1,
+        min(num_candidates, HANDWRITING_NUM_BEAMS),
+    )
+
     with torch.inference_mode():
         generation_output = model.generate(
             pixel_values,
             max_new_tokens=MAX_GENERATED_TOKENS,
-            # Wider beam search considers more candidate readings
-            # before picking one — better accuracy on messy
-            # handwriting than a narrow beam, at a CPU cost that
-            # scales with the width (tune via HANDWRITING_NUM_BEAMS).
             num_beams=HANDWRITING_NUM_BEAMS,
+            num_return_sequences=return_count,
             early_stopping=True,
             return_dict_in_generate=True,
             output_scores=True,
         )
 
-    generated_text = processor.batch_decode(
+    decoded_texts = processor.batch_decode(
         generation_output.sequences,
         skip_special_tokens=True,
-    )[0].strip()
-
-    confidence = calculate_generation_confidence(
-        generation_output
     )
 
+    candidates: list[dict[str, Any]] = []
+
+    for index, text in enumerate(decoded_texts):
+        cleaned_text = text.strip()
+
+        if not cleaned_text:
+            continue
+
+        candidates.append(
+            {
+                "text": cleaned_text,
+                "confidence": calculate_generation_confidence(
+                    generation_output,
+                    sequence_index=index,
+                ),
+                "engine": "TrOCR",
+                "model": HANDWRITING_MODEL_NAME,
+                "requires_confirmation": True,
+            }
+        )
+
+    return candidates
+
+
+def recognize_handwritten_line_candidates(
+    line_image: Image.Image,
+    num_candidates: int = 3,
+) -> list[dict[str, Any]]:
+    """
+    Recognize text from one cropped handwritten line, returning
+    MULTIPLE candidate transcriptions rather than just the single
+    best one.
+
+    Beam search already explores several plausible readings
+    internally before picking a winner — this exposes those
+    alternatives instead of discarding them, so a caller that knows
+    the valid universe of answers (e.g. a real medicine catalog) can
+    pick whichever candidate actually matches a real medicine, rather
+    than being stuck with the model's single top guess even when a
+    lower-ranked candidate would have been correct.
+
+    Candidates are returned sorted by the model's own confidence,
+    most confident first. Do not pass a complete multi-line
+    prescription — pass a cropped image containing one text line.
+    """
+
+    prepared_image = prepare_handwriting_image(
+        line_image
+    )
+
+    candidates = _recognize_prepared_image_candidates(
+        prepared_image,
+        num_candidates=num_candidates,
+    )
+
+    candidates.sort(
+        key=lambda item: item["confidence"],
+        reverse=True,
+    )
+
+    return candidates
+
+
+def recognize_handwritten_line_multi_preprocessing(
+    line_image: Image.Image,
+    num_candidates_per_variant: int = 3,
+) -> list[dict[str, Any]]:
+    """
+    Like recognize_handwritten_line_candidates, but tries recognition
+    on TWO different preprocessing variants of the same crop (plain
+    contrast-enhanced, and adaptively binarized) and pools all
+    resulting candidates together.
+
+    Some words — especially joined/cursive ones, or crops from a
+    photograph with a shadow or fold crease — read better after
+    binarization; others read better from the softer grayscale
+    version. Rather than commit to one preprocessing choice, both are
+    tried and every candidate from both is returned so the medicine
+    catalog re-ranking (handwriting_fallback.pick_best_candidate) can
+    pick whichever one actually matches a real medicine, regardless
+    of which preprocessing path produced it.
+    """
+
+    plain_prepared = prepare_handwriting_image(
+        line_image
+    )
+    plain_candidates = _recognize_prepared_image_candidates(
+        plain_prepared,
+        num_candidates=num_candidates_per_variant,
+    )
+
+    for candidate in plain_candidates:
+        candidate["preprocessing"] = "contrast_enhanced"
+
+    binarized_prepared = (
+        prepare_handwriting_image_binarized(
+            line_image
+        )
+    )
+    binarized_candidates = (
+        _recognize_prepared_image_candidates(
+            binarized_prepared,
+            num_candidates=num_candidates_per_variant,
+        )
+    )
+
+    for candidate in binarized_candidates:
+        candidate["preprocessing"] = "binarized"
+
+    all_candidates = plain_candidates + binarized_candidates
+
+    all_candidates.sort(
+        key=lambda item: item["confidence"],
+        reverse=True,
+    )
+
+    return all_candidates
+
+
+def recognize_handwritten_line(
+    line_image: Image.Image,
+) -> dict[str, Any]:
+    """
+    Recognize text from one cropped handwritten line, returning
+    only the single best (highest-confidence) candidate.
+
+    Kept for backward compatibility with callers that only need one
+    result (e.g. recognize_handwritten_file below). New code that can
+    make use of the medicine catalog to pick the best match should
+    prefer recognize_handwritten_line_candidates() instead.
+
+    Important:
+        Do not pass a complete multi-line prescription.
+        Pass a cropped image containing one text line.
+    """
+
+    candidates = recognize_handwritten_line_candidates(
+        line_image,
+        num_candidates=1,
+    )
+
+    if candidates:
+        return candidates[0]
+
     return {
-        "text": generated_text,
-        "confidence": confidence,
+        "text": "",
+        "confidence": 0.0,
         "engine": "TrOCR",
         "model": HANDWRITING_MODEL_NAME,
         "requires_confirmation": True,

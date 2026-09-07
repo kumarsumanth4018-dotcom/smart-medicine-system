@@ -3,12 +3,32 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image
-from app.medicine_matcher import get_medication_region, should_check_line, strip_rx_prefix
+from app.medicine_matcher import (
+    calculate_match_score,
+    extract_strengths,
+    get_medication_region,
+    should_check_line,
+    strip_rx_prefix,
+)
 
 from app.handwriting_engine import (
     HANDWRITING_MODEL_NAME,
-    recognize_handwritten_line,
+    recognize_handwritten_line_multi_preprocessing,
 )
+
+# How many alternate TrOCR readings to consider per line when
+# re-ranking against the real medicine catalog. Higher finds more
+# correct-but-not-top-ranked readings, at a small extra CPU cost per
+# line (candidates share one generate() call, so this is cheap).
+NUM_CANDIDATES_PER_LINE = 3
+
+# A re-ranked candidate only replaces the model's own top choice if
+# it scores at least this well against the catalog — otherwise a
+# fuzzy match on unrelated text (a signature, a clinic name) could
+# get silently swapped in for a poor reason. This mirrors
+# medicine_matcher's own MINIMUM_MATCH_SCORE, since a candidate that
+# wouldn't pass that bar wouldn't be usable downstream anyway.
+MIN_RERANK_SCORE = 82.0
 
 
 # Maximum number of lines processed by TrOCR in one request.
@@ -180,10 +200,76 @@ def find_fallback_candidates(
     return candidates[:MAX_FALLBACK_LINES]
 
 
+def pick_best_candidate(
+    candidates: list[dict[str, Any]],
+    catalog: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    """
+    Given several alternate TrOCR readings of the same handwritten
+    line (already sorted by the model's own confidence), pick
+    whichever one best matches a real medicine in the catalog —
+    rather than always trusting the model's single top guess.
+
+    Falls back to the model's top candidate (candidates[0]) if no
+    catalog is available, or if nothing scores well enough to be a
+    confident correction — this preserves the original behavior for
+    lines that genuinely aren't a medicine (a signature, a clinic
+    name), instead of forcing a bad catalog match onto them.
+    """
+
+    if not candidates:
+        return {
+            "text": "",
+            "confidence": 0.0,
+        }
+
+    top_candidate = candidates[0]
+
+    if not catalog:
+        return top_candidate
+
+    best_candidate = top_candidate
+    best_score = -1.0
+
+    for candidate in candidates:
+        text = candidate.get("text", "")
+
+        if not text:
+            continue
+
+        # A candidate can only be a genuinely useful correction if it
+        # will actually survive medicine_matcher.find_matches' own
+        # gate downstream — which requires a cleanly parseable
+        # strength (e.g. "500mg"). A candidate that fuzzy-matches
+        # well on the name but still garbles the strength (like
+        # "s0ong" or "s00mg") would be filtered out later anyway, so
+        # don't let it win the re-rank here either.
+        if not extract_strengths(text):
+            continue
+
+        candidate_score = max(
+            (
+                calculate_match_score(text, medicine)
+                for medicine in catalog
+            ),
+            default=0.0,
+        )
+
+        if candidate_score > best_score:
+            best_score = candidate_score
+            best_candidate = candidate
+
+    if best_score >= MIN_RERANK_SCORE:
+        return best_candidate
+
+    return top_candidate
+
+
 def run_handwriting_fallback(
     image_path: str,
     ocr_lines: list[dict[str, Any]],
     unmatched_lines: list[dict[str, Any]],
+    catalog: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """
     Crop unmatched medicine-like PaddleOCR lines and read
@@ -246,10 +332,38 @@ def run_handwriting_fallback(
             line_started = time.perf_counter()
             print(f"[OCR] TrOCR line {len(recognized_lines) + 1}/{len(fallback_candidates)}", flush=True)
             try:
-                trocr_result = (
-                    recognize_handwritten_line(
-                        cropped_line
+                candidates = (
+                    recognize_handwritten_line_multi_preprocessing(
+                        cropped_line,
+                        num_candidates_per_variant=NUM_CANDIDATES_PER_LINE,
                     )
+                )
+
+                for candidate_index, candidate_item in enumerate(candidates):
+                    print(
+                        f"[OCR]   candidate {candidate_index + 1}/{len(candidates)} "
+                        f"[{candidate_item.get('preprocessing', '?')}]: "
+                        f"{candidate_item.get('text', '')!r} "
+                        f"(model confidence: {candidate_item.get('confidence', 0)})",
+                        flush=True,
+                    )
+
+                trocr_result = pick_best_candidate(
+                    candidates,
+                    catalog,
+                )
+
+                chosen_index = next(
+                    (
+                        i for i, c in enumerate(candidates)
+                        if c is trocr_result
+                    ),
+                    0,
+                )
+                print(
+                    f"[OCR]   -> picked candidate {chosen_index + 1} "
+                    f"(catalog re-ranking {'changed the result' if chosen_index != 0 else 'kept the model top choice'})",
+                    flush=True,
                 )
 
                 recognized_text = str(
@@ -278,6 +392,14 @@ def run_handwriting_fallback(
                         ),
                         "engine": "TrOCR",
                         "requires_confirmation": True,
+                        # Other readings the model considered, in
+                        # case the confirming pharmacist wants to see
+                        # what else was plausible for a messy word.
+                        "alternate_readings": [
+                            item["text"]
+                            for item in candidates
+                            if item is not trocr_result
+                        ],
                     }
                 )
 
