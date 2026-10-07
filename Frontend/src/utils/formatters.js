@@ -11,6 +11,31 @@
  * @param {number} amount
  * @returns {string}  e.g. "₹ 25.50"
  */
+/**
+ * Formats a timestamp as a short relative time string, e.g. "10 min ago".
+ * @param {string|Date} timestamp
+ * @returns {string}
+ */
+export function formatTimeAgo(timestamp) {
+  if (!timestamp) return ''
+
+  const then = new Date(timestamp)
+  const seconds = Math.floor((Date.now() - then.getTime()) / 1000)
+
+  if (seconds < 60) return 'Just now'
+
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes} min ago`
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`
+
+  return then.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 export function formatCurrency(amount) {
   if (amount == null) return '—'
   return new Intl.NumberFormat('en-IN', {

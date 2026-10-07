@@ -1,72 +1,96 @@
-/**
- * OCR Service
- *
- * Communicates with the separate FastAPI OCR service
- * running on port 8001.
- */
+import axios from 'axios'
 
-const OCR_API_URL =
-  import.meta.env.VITE_OCR_API_URL ||
+const OCR_API_BASE_URL =
+  import.meta.env.VITE_OCR_API_BASE_URL ||
   'http://127.0.0.1:8001/api/v1'
 
+const ocrClient = axios.create({
+  baseURL: OCR_API_BASE_URL,
 
-const ocrService = {
-  async scanPrescription(file, { timeoutMs = 180000 } = {}) {
-    if (!file) {
-      throw new Error('Please select a prescription image.')
-    }
+  // PaddleOCR + TrOCR can take over one minute on CPU.
+  timeout: 180000,
 
-    const formData = new FormData()
-    formData.append('file', file)
-
-    // Handwriting recognition can genuinely take a while (a heavier,
-    // more accurate model + wide beam search per unmatched line, all
-    // on CPU) — this timeout exists so the UI can show a clear,
-    // honest message instead of spinning forever with no feedback,
-    // not because 3 minutes is always "too long" for this to take.
-    const controller = new AbortController()
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      timeoutMs,
-    )
-
-    let response
-    try {
-      response = await fetch(
-        `${OCR_API_URL}/ocr/prescription`,
-        {
-          method: 'POST',
-          body: formData,
-          signal: controller.signal,
-        },
-      )
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        throw new Error(
-          'Scanning is taking longer than expected. The OCR service '
-          + 'may still be processing, or may not be reachable — check '
-          + 'that it is running, then try again.',
-        )
-      }
-      throw new Error(
-        'Could not reach the OCR service. Make sure it is running.',
-      )
-    } finally {
-      clearTimeout(timeoutId)
-    }
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(
-        data.detail ||
-        'Unable to scan the prescription.',
-      )
-    }
-
-    return data
+  headers: {
+    Accept: 'application/json',
   },
+})
+
+const getErrorMessage = (error) => {
+  if (
+    error?.code === 'ECONNABORTED' ||
+    error?.code === 'ETIMEDOUT'
+  ) {
+    return (
+      'The prescription scan exceeded three minutes. ' +
+      'Check the OCR terminal and try again.'
+    )
+  }
+
+  if (!error?.response) {
+    return (
+      'The OCR service could not be reached. ' +
+      'Make sure it is running on port 8001.'
+    )
+  }
+
+  const detail = error.response?.data?.detail
+
+  if (typeof detail === 'string') {
+    return detail
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => item?.msg || String(item))
+      .join(', ')
+  }
+
+  return (
+    error.response?.data?.message ||
+    `OCR request failed with status ${error.response.status}.`
+  )
 }
 
+const scanPrescription = async (file) => {
+  if (!(file instanceof File)) {
+    throw new Error(
+      'Please select a valid prescription image.',
+    )
+  }
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  try {
+    const response = await ocrClient.post(
+      '/ocr/prescription',
+      formData,
+      {
+        timeout: 180000,
+      },
+    )
+
+    return response.data
+  } catch (error) {
+    throw new Error(getErrorMessage(error))
+  }
+}
+
+const checkHealth = async () => {
+  try {
+    const response = await ocrClient.get('/health', {
+      timeout: 10000,
+    })
+
+    return response.data
+  } catch (error) {
+    throw new Error(getErrorMessage(error))
+  }
+}
+
+const ocrService = {
+  scanPrescription,
+  checkHealth,
+}
 
 export default ocrService

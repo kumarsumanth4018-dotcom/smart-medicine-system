@@ -23,8 +23,10 @@ import {
   HiOutlineArrowsRightLeft,
   HiOutlineDocumentArrowDown,
   HiOutlineFlag,
+  HiOutlineBellAlert, HiCheckCircle,
 } from 'react-icons/hi2'
 import Button from '../../../components/ui/Button'
+import notificationService from '../../../services/notificationService'
 
 // =====================================================
 // Action Panel
@@ -32,8 +34,9 @@ import Button from '../../../components/ui/Button'
 function ActionPanel({ medicine = {} }) {
   const [isSaved,   setIsSaved]   = useState(false)
   const [isShared,  setIsShared]  = useState(false)
+  const [notifyState, setNotifyState] = useState('idle') // 'idle' | 'loading' | 'subscribed' | 'error'
 
-  const { name = 'Medicine', price } = medicine
+  const { name = 'Medicine', price, pmbiCode } = medicine
 
   function handleSave() {
     setIsSaved((s) => !s)
@@ -60,6 +63,17 @@ function ActionPanel({ medicine = {} }) {
 
   function handleCompare() {
     // TODO: add to compare selection and navigate to results
+  }
+
+  async function handleNotifyMe() {
+    if (!pmbiCode || notifyState === 'loading' || notifyState === 'subscribed') return
+    setNotifyState('loading')
+    try {
+      await notificationService.subscribeToStockAlert(pmbiCode)
+      setNotifyState('subscribed')
+    } catch {
+      setNotifyState('error')
+    }
   }
 
   return (
@@ -100,6 +114,28 @@ function ActionPanel({ medicine = {} }) {
       >
         {isShared ? 'Copied link!' : 'Share Medicine'}
       </Button>
+
+      <Button
+        variant={notifyState === 'subscribed' ? 'secondary' : 'outline'}
+        fullWidth
+        leftIcon={
+          notifyState === 'subscribed'
+            ? <HiCheckCircle size={16} />
+            : <HiOutlineBellAlert size={16} />
+        }
+        onClick={handleNotifyMe}
+        disabled={notifyState === 'loading' || notifyState === 'subscribed'}
+        aria-label={`Notify me when ${name} is back in stock`}
+      >
+        {notifyState === 'subscribed'
+          ? "We'll notify you"
+          : notifyState === 'loading'
+            ? 'Subscribing…'
+            : 'Notify Me If Out of Stock'}
+      </Button>
+      {notifyState === 'error' && (
+        <p className="text-xs text-danger-600 -mt-1">Couldn't subscribe. Try again.</p>
+      )}
 
       {/* Divider */}
       <hr className="border-slate-100" />

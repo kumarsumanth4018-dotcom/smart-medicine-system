@@ -6,6 +6,7 @@ from app.database.connection import connect_to_mongodb, close_mongodb_connection
 from app.routers.auth_router import router as auth_router
 from app.routers.medicine_router import router as medicine_router
 from app.routers.kendra_router import router as kendra_router
+from app.routers.notification_router import router as notification_router
 from app.routers.admin_router import router as admin_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,6 +38,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(medicine_router)
 app.include_router(kendra_router)
+app.include_router(notification_router)
 app.include_router(admin_router)
 @app.get("/")
 async def root():
